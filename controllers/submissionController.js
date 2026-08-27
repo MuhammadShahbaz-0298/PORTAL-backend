@@ -1,8 +1,13 @@
 const fs = require('fs');
+const path = require('path');
 const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
 const Enrollment = require('../models/Enrollment');
 const Batch = require('../models/Batch');
+
+const resolveStoredFilePath = (filePath) => (
+  path.isAbsolute(filePath) ? filePath : path.resolve(__dirname, '..', filePath)
+);
 
 exports.createSubmission = async (req, res) => {
   try {
@@ -56,7 +61,7 @@ exports.updateSubmission = async (req, res) => {
     submission.gradedAt = null;
     submission.submittedAt = new Date();
     await submission.save();
-    if (previousPath && previousPath !== submission.filePath) fs.unlink(previousPath, () => {});
+    if (previousPath && previousPath !== submission.filePath) fs.unlink(resolveStoredFilePath(previousPath), () => {});
     res.json(await submission.populate(['assignment', 'batch', 'student']));
   } catch (err) { if (req.file) fs.unlink(req.file.path, () => {}); res.status(400).json({ error: err.message }); }
 };
@@ -97,5 +102,5 @@ exports.downloadSubmission = async (req, res) => {
   if (!submission) return res.status(404).json({ error: 'Submission not found' });
   const allowed = req.user.role === 'admin' || (req.user.role === 'student' && String(submission.student) === String(req.user.userId)) || (req.user.role === 'teacher' && String(submission.batch.teacher) === String(req.user.userId));
   if (!allowed) return res.status(403).json({ error: 'Not authorized to access this file' });
-  res.download(submission.filePath, submission.fileName);
+  res.download(resolveStoredFilePath(submission.filePath), submission.fileName);
 };
