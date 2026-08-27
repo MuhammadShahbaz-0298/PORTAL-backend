@@ -1,0 +1,30 @@
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const uniqueName = `${Date.now()}-${req.user.userId}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const isZipExt = path.extname(file.originalname).toLowerCase() === '.zip';
+  const isZipMime = [
+    'application/zip',
+    'application/x-zip-compressed',
+    'multipart/x-zip',
+  ].includes(file.mimetype);
+
+  if (isZipExt && isZipMime) return cb(null, true);
+  cb(new Error('Only .zip files are allowed'));
+};
+
+const uploadZip = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB cap, adjust as needed
+});
+
+module.exports = uploadZip;
