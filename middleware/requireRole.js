@@ -1,9 +1,10 @@
-// Usage: requireRole('admin') or requireRole('teacher', 'admin')
+const { AppError } = require('../utils/errors');
+
 const requireRole = (...allowedRoles) => (req, res, next) => {
   if (!req.user || !allowedRoles.includes(req.user.role)) {
-    return res.status(403).json({ error: 'Forbidden: insufficient role' });
+    return next(new AppError('You do not have permission to access this resource.', 403));
   }
-  next();
+  return next();
 };
 
 module.exports = requireRole;

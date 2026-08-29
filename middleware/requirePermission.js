@@ -1,15 +1,30 @@
 const User = require('../models/User');
-const { ROLE_DEFAULTS } = require('../config/permissions');
 const Role = require('../models/Role');
+const { ROLE_DEFAULTS } = require('../config/permissions');
+const { AppError } = require('../utils/errors');
+const { getUserId, isAdmin } = require('../utils/authorization');
 
-const requirePermission = (...required) => async (req, res, next) => {
-  try {
-    if (req.user.role === 'admin') return next();
-    const user = await User.findById(req.user.userId).select('permissions role active');
-    const storedRole = await Role.findOne({ name: req.user.role, active: true }).select('permissions').lean();
-    const permissions = storedRole ? (storedRole.permissions || []) : (user?.permissions?.length ? user.permissions : (ROLE_DEFAULTS[req.user.role] || []));
-    if (!user || !user.active || !required.every((item) => permissions.includes(item))) return res.status(403).json({ error: 'Permission denied' });
-    next();
-  } catch (err) { next(err); }
+const resolvePermissions = async (user) => {
+  const role = await Role.findOne({ name: user.role, active: true }).select('permissions').lean();
+  return role?.permissions || (user.permissions?.length ? user.permissions : (ROLE_DEFAULTS[user.role] || []));
 };
+
+const requirePermission = (...requiredPermissions) => async (req, res, next) => {
+  try {
+    if (isAdmin(req.user)) return next();
+
+    const user = await User.findById(getUserId(req.user)).select('permissions role active');
+    if (!user || !user.active) return next(new AppError('Active user account is required.', 403));
+
+    const permissions = await resolvePermissions(user);
+    if (!requiredPermissions.every((permission) => permissions.includes(permission))) {
+      return next(new AppError('You do not have the required permission.', 403));
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = requirePermission;

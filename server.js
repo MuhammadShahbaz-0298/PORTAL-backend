@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const { sendError, sendSuccess, normalizeError } = require('./utils/http');
 
 const authRoutes = require('./routes/auth');
 const batchRoutes = require('./routes/batches');
@@ -18,7 +19,7 @@ connectDB();
 
 app.use(cors({ origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((value) => value.trim()) : true }));
 app.use(express.json({ limit: '1mb' }));
-app.get('/health', (req, res) => res.json({ ok: true, service: 'school-portal-backend' }));
+app.get('/health', (req, res) => sendSuccess(res, { service: 'school-portal-backend' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/batches', batchRoutes);
@@ -29,11 +30,13 @@ app.use('/api/users', userRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/roles', roleRoutes);
 
-// Central error handler (multer errors, etc. land here too)
+// Keep error serialization in one place so every route has the same contract.
 app.use((err, req, res, next) => {
-  console.error(err);
-  if (err.name === 'MulterError') return res.status(400).json({ error: err.message });
-  res.status(err.status || 500).json({ error: err.message || 'Server error' });
+  const normalizedError = err.name === 'MulterError'
+    ? Object.assign(new Error(err.message), { statusCode: 400 })
+    : normalizeError(err);
+  if ((normalizedError.statusCode || 500) >= 500) console.error(err);
+  return sendError(res, normalizedError);
 });
 
 const PORT = process.env.PORT || 5000;
