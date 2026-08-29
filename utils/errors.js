@@ -1,7 +1,7 @@
 class AppError extends Error {
   constructor(message, statusCode = 500, details = undefined) {
     super(message);
-    this.name = 'AppError';
+    this.name = "AppError";
     this.statusCode = statusCode;
     this.details = details;
     Error.captureStackTrace(this, this.constructor);
@@ -9,8 +9,8 @@ class AppError extends Error {
 }
 
 const isDuplicateKeyError = (error) => error?.code === 11000;
-const isValidationError = (error) => error?.name === 'ValidationError';
-const isCastError = (error) => error?.name === 'CastError';
+const isValidationError = (error) => error?.name === "ValidationError";
+const isCastError = (error) => error?.name === "CastError";
 
 module.exports = {
   AppError,
@@ -18,4 +18,3 @@ module.exports = {
   isValidationError,
   isCastError,
 };
-

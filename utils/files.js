@@ -1,4 +1,4 @@
-const fs = require('fs/promises');
+const fs = require("fs/promises");
 
 const ZIP_SIGNATURES = [
   Buffer.from([0x50, 0x4b, 0x03, 0x04]),
@@ -7,7 +7,7 @@ const ZIP_SIGNATURES = [
 ];
 
 const isZipFile = async (filePath) => {
-  const handle = await fs.open(filePath, 'r');
+  const handle = await fs.open(filePath, "r");
   try {
     const buffer = Buffer.alloc(4);
     await handle.read(buffer, 0, 4, 0);

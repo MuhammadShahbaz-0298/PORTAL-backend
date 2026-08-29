@@ -5,14 +5,16 @@
 //
 // Run this once, then delete or ignore this file. Do not expose it as an API route.
 
-require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('./models/User');
+require("dotenv").config();
+const mongoose = require("mongoose");
+const User = require("./models/User");
 
 const [, , name, email, password] = process.argv;
 
 if (!name || !email || !password) {
-  console.error('Usage: node seedAdmin.js "Admin Name" admin@example.com password123');
+  console.error(
+    'Usage: node seedAdmin.js "Admin Name" admin@example.com password123',
+  );
   process.exit(1);
 }
 
@@ -21,11 +23,11 @@ if (!name || !email || !password) {
 
   const existing = await User.findOne({ email });
   if (existing) {
-    console.log('A user with that email already exists.');
+    console.log("A user with that email already exists.");
     process.exit(0);
   }
 
-  const admin = await User.create({ name, email, password, role: 'admin' });
+  const admin = await User.create({ name, email, password, role: "admin" });
   console.log(`Admin created: ${admin.email}`);
   process.exit(0);
 })();

@@ -1,23 +1,27 @@
-const Submission = require('../models/Submission');
-const Batch = require('../models/Batch');
+const Submission = require("../models/Submission");
+const { AppError } = require("../utils/errors");
+const { getUserId, isAdmin } = require("../utils/authorization");
 
-// Checks that the logged-in teacher owns the batch tied to the submission
-// being accessed. Admin always bypasses this check.
+// Teachers may access submissions only when the related batch belongs to them; admins bypass ownership.
 const requireOwnBatch = async (req, res, next) => {
   try {
-    if (req.user.role === 'admin') return next();
+    if (isAdmin(req.user)) return next();
 
-    const submission = await Submission.findById(req.params.id).populate('batch');
-    if (!submission) return res.status(404).json({ error: 'Submission not found' });
-
-    if (String(submission.batch.teacher) !== String(req.user.userId)) {
-      return res.status(403).json({ error: 'Not your batch' });
+    const submission = await Submission.findById(req.params.id).populate(
+      "batch",
+    );
+    if (!submission) return next(new AppError("Submission not found.", 404));
+    if (
+      !submission.batch ||
+      String(submission.batch.teacher) !== String(getUserId(req.user))
+    ) {
+      return next(new AppError("You do not have access to this batch.", 403));
     }
 
-    req.submission = submission; // pass along so the controller doesn't refetch
-    next();
-  } catch (err) {
-    next(err);
+    req.submission = submission;
+    return next();
+  } catch (error) {
+    return next(error);
   }
 };
 
