@@ -1,5 +1,9 @@
 const Role = require("../models/Role");
-const { PERMISSIONS, ROLE_DEFAULTS } = require("../config/permissions");
+const {
+  PERMISSIONS,
+  ROLE_DEFAULTS,
+  normalizePermissions,
+} = require("../config/permissions");
 const { AppError } = require("../utils/errors");
 const { assertObjectId } = require("../utils/validation");
 
@@ -12,12 +16,16 @@ const CORE_ROLES = [
 const validatePermissions = (permissions) => {
   if (!Array.isArray(permissions))
     throw new AppError("Permissions must be an array.", 400);
+
+  const sanitized = normalizePermissions(permissions);
   const invalid = permissions.filter(
-    (permission) => !PERMISSIONS.includes(permission),
+    (permission) => !PERMISSIONS.includes(String(permission).trim()),
   );
-  if (invalid.length)
+
+  if (invalid.length && sanitized.length === 0)
     throw new AppError("One or more permissions are invalid.", 400, invalid);
-  return permissions;
+
+  return sanitized;
 };
 
 const ensureCoreRoles = () =>

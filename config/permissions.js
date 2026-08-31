@@ -21,6 +21,21 @@ const PERMISSIONS = [
   "roles.manage",
   "profile.view",
 ];
+
+const normalizePermissions = (permissions = []) => {
+  if (!Array.isArray(permissions)) return [];
+  const next = new Set();
+
+  for (const permission of permissions) {
+    if (typeof permission !== "string") continue;
+    const value = permission.trim();
+    if (!value) continue;
+    if (PERMISSIONS.includes(value)) next.add(value);
+  }
+
+  return [...next];
+};
+
 const ROLE_DEFAULTS = {
   admin: PERMISSIONS,
   teacher: [
@@ -43,4 +58,4 @@ const ROLE_DEFAULTS = {
     "profile.view",
   ],
 };
-module.exports = { PERMISSIONS, ROLE_DEFAULTS };
+module.exports = { PERMISSIONS, ROLE_DEFAULTS, normalizePermissions };

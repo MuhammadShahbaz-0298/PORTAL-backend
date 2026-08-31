@@ -4,6 +4,7 @@ const Attendance = require("../models/Attendance");
 const Submission = require("../models/Submission");
 const { AppError } = require("../utils/errors");
 const { getUserId } = require("../utils/authorization");
+const { normalizePermissions } = require("../config/permissions");
 const {
   assertEmail,
   assertObjectId,
@@ -46,7 +47,7 @@ exports.updateUser = async (req, res, next) => {
     if (permissions !== undefined) {
       if (!Array.isArray(permissions))
         throw new AppError("Permissions must be an array.", 400);
-      user.permissions = permissions;
+      user.permissions = normalizePermissions(permissions);
     }
 
     await user.save();

@@ -1,5 +1,9 @@
 const User = require("../models/User");
-const { PERMISSIONS, ROLE_DEFAULTS } = require("../config/permissions");
+const {
+  PERMISSIONS,
+  ROLE_DEFAULTS,
+  normalizePermissions,
+} = require("../config/permissions");
 const { AppError } = require("../utils/errors");
 const { assertObjectId } = require("../utils/validation");
 
@@ -12,10 +16,12 @@ exports.updateUserPermissions = async (req, res, next) => {
     if (!Array.isArray(req.body.permissions))
       throw new AppError("Permissions must be an array.", 400);
 
+    const sanitizedPermissions = normalizePermissions(req.body.permissions);
     const invalidPermissions = req.body.permissions.filter(
-      (permission) => !PERMISSIONS.includes(permission),
+      (permission) => !PERMISSIONS.includes(String(permission).trim()),
     );
-    if (invalidPermissions.length)
+
+    if (invalidPermissions.length && sanitizedPermissions.length === 0)
       throw new AppError(
         "One or more permissions are invalid.",
         400,
@@ -24,7 +30,7 @@ exports.updateUserPermissions = async (req, res, next) => {
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { permissions: req.body.permissions },
+      { permissions: sanitizedPermissions },
       { new: true, runValidators: true },
     ).select("-password");
     if (!user) throw new AppError("User not found.", 404);
