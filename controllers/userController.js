@@ -1,5 +1,7 @@
 const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
+const Attendance = require("../models/Attendance");
+const Submission = require("../models/Submission");
 const { AppError } = require("../utils/errors");
 const { getUserId } = require("../utils/authorization");
 const {
@@ -67,14 +69,22 @@ exports.deleteUser = async (req, res, next) => {
   try {
     assertObjectId(req.params.id, "user id");
     if (String(req.params.id) === String(getUserId(req.user)))
-      throw new AppError("You cannot deactivate your own account.", 400);
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { active: false },
-      { new: true },
-    ).select("-password");
+      throw new AppError("You cannot delete your own account.", 400);
+    const user = await User.findById(req.params.id).select("_id");
     if (!user) throw new AppError("User not found.", 404);
-    return res.json(user);
+
+    await Promise.all([
+      Enrollment.deleteMany({ student: user._id }),
+      Attendance.deleteMany({
+        $or: [{ student: user._id }, { enteredBy: user._id }],
+      }),
+      Submission.deleteMany({
+        $or: [{ student: user._id }, { gradedBy: user._id }],
+      }),
+      User.deleteOne({ _id: user._id }),
+    ]);
+
+    return res.json({ message: "User permanently deleted." });
   } catch (error) {
     return next(error);
   }
