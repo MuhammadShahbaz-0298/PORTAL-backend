@@ -12,6 +12,7 @@ const {
   assertPassword,
   requireFields,
 } = require("../utils/validation");
+const { PERMISSIONS, normalizePermissions } = require("../config/permissions");
 
 test("validation helpers accept valid values and reject invalid values", async () => {
   assert.equal(assertEmail(" Student@Example.com "), "student@example.com");
@@ -41,4 +42,22 @@ test("ZIP validation checks file signatures and cleanup is safe", async () => {
   await removeFile(zipPath);
   await removeFile(textPath);
   await fs.rm(directory, { recursive: true, force: true });
+});
+
+test("permission normalization keeps valid values and drops stale entries", () => {
+  const cleaned = normalizePermissions([
+    "dashboard.view",
+    "students.view",
+    "legacy.permission",
+    "students.view",
+    " ",
+    null,
+    undefined,
+  ]);
+
+  assert.deepEqual(cleaned, ["dashboard.view", "students.view"]);
+  assert.ok(PERMISSIONS.includes("students.view"));
+
+  const empty = normalizePermissions(["legacy.permission", "bad.value"]);
+  assert.deepEqual(empty, []);
 });
