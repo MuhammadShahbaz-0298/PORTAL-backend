@@ -1,5 +1,6 @@
 const Batch = require("../models/Batch");
 const Enrollment = require("../models/Enrollment");
+const Attendance = require("../models/Attendance");
 
 // POST /api/batches  (admin only)
 exports.createBatch = async (req, res) => {
@@ -18,11 +19,6 @@ exports.enrollStudent = async (req, res) => {
     const { studentId } = req.body;
     const targetBatch = await Batch.findById(req.params.id);
     if (!targetBatch) return res.status(404).json({ error: "Batch not found" });
-    if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ error: "Only administrators can enroll students." });
-    }
     await Enrollment.deleteMany({
       student: studentId,
       batch: { $ne: req.params.id },
@@ -47,10 +43,6 @@ exports.updateBatch = async (req, res) => {
   try {
     const batch = await Batch.findById(req.params.id);
     if (!batch) return res.status(404).json({ error: "Batch not found" });
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Only administrators can edit batches." });
-    }
-
     const { name, teacherId } = req.body;
     if (name !== undefined) {
       if (!String(name).trim())
@@ -68,12 +60,13 @@ exports.updateBatch = async (req, res) => {
 
 exports.deleteBatch = async (req, res) => {
   try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Only administrators can delete batches." });
-    }
     const batch = await Batch.findById(req.params.id);
     if (!batch) return res.status(404).json({ error: "Batch not found" });
 
+    await Attendance.updateMany(
+      { batch: batch._id },
+      { $set: { batchName: batch.name } },
+    );
     await Enrollment.deleteMany({ batch: batch._id });
     await batch.deleteOne();
     res.json({ message: "Batch deleted successfully." });

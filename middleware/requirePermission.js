@@ -2,7 +2,7 @@ const User = require("../models/User");
 const Role = require("../models/Role");
 const { ROLE_DEFAULTS } = require("../config/permissions");
 const { AppError } = require("../utils/errors");
-const { getUserId, isAdmin } = require("../utils/authorization");
+const { getUserId } = require("../utils/authorization");
 
 const resolvePermissions = async (user) => {
   const role = await Role.findOne({ name: user.role, active: true })
@@ -20,8 +20,6 @@ const requirePermission =
   (...requiredPermissions) =>
   async (req, res, next) => {
     try {
-      if (isAdmin(req.user)) return next();
-
       const user = await User.findById(getUserId(req.user)).select(
         "permissions role active",
       );

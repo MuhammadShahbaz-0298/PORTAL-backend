@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const requireRole = require("../middleware/requireRole");
+const requirePermission = require("../middleware/requirePermission");
 const {
   createBatch,
   enrollStudent,
@@ -11,20 +11,20 @@ const {
   getBatchStudents,
 } = require("../controllers/batchController");
 
-router.get("/", auth, getBatches);
-router.post("/", auth, requireRole("admin"), createBatch);
-router.patch("/:id", auth, requireRole("admin"), updateBatch);
-router.delete("/:id", auth, requireRole("admin"), deleteBatch);
+router.get("/", auth, requirePermission("batches.view"), getBatches);
+router.post("/", auth, requirePermission("batches.create"), createBatch);
+router.patch("/:id", auth, requirePermission("batches.update"), updateBatch);
+router.delete("/:id", auth, requirePermission("batches.delete"), deleteBatch);
 router.post(
   "/:id/enroll",
   auth,
-  requireRole("admin"),
+  requirePermission("batches.enroll"),
   enrollStudent,
 );
 router.get(
   "/:id/students",
   auth,
-  requireRole("admin"),
+  requirePermission("batches.enroll"),
   getBatchStudents,
 );
 

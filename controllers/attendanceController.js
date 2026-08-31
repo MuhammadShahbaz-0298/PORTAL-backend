@@ -24,6 +24,8 @@ exports.addAttendance = async (req, res) => {
         .json({ error: "You cannot manage attendance for this batch" });
     if (!userId(req.user))
       return res.status(401).json({ error: "Session user is missing" });
+    const batch = await Batch.findById(batchId).select("name");
+    if (!batch) return res.status(404).json({ error: "Batch not found" });
     if (!(await Enrollment.exists({ student: studentId, batch: batchId })))
       return res
         .status(400)
@@ -31,7 +33,7 @@ exports.addAttendance = async (req, res) => {
     const record = await Attendance.findOneAndUpdate(
       { student: studentId, batch: batchId, date: new Date(date) },
       {
-        $set: { status, enteredBy: userId(req.user) },
+        $set: { status, enteredBy: userId(req.user), batchName: batch.name },
         $setOnInsert: {
           student: studentId,
           batch: batchId,

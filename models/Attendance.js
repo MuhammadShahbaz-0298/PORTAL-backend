@@ -13,6 +13,7 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    batchName: { type: String, trim: true },
     date: { type: Date, required: true },
     status: {
       type: String,
