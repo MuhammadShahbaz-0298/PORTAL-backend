@@ -7,6 +7,11 @@ const userRole = (user) =>
   String(user?.role || "")
     .trim()
     .toLowerCase();
+const isExpired = (assignment, now = new Date()) =>
+  Boolean(
+    assignment?.dueDate &&
+      new Date(assignment.dueDate).getTime() <= now.getTime(),
+  );
 const canManage = async (user, batchId) => {
   if (userRole(user) === "admin") return true;
   if (userRole(user) !== "teacher") return false;
@@ -23,6 +28,7 @@ exports.listAssignments = async (req, res) => {
       return res.status(401).json({ error: "Session user is missing" });
     if (role === "student") {
       filter.active = true;
+      filter.dueDate = { $gt: new Date() };
       const enrollments = await Enrollment.find({
         student: requesterId,
       }).select("batch");

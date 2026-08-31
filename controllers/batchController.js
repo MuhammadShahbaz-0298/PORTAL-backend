@@ -18,13 +18,11 @@ exports.enrollStudent = async (req, res) => {
     const { studentId } = req.body;
     const targetBatch = await Batch.findById(req.params.id);
     if (!targetBatch) return res.status(404).json({ error: "Batch not found" });
-    if (
-      req.user.role === "teacher" &&
-      String(targetBatch.teacher) !== String(req.user.userId)
-    )
+    if (req.user.role !== "admin") {
       return res
         .status(403)
-        .json({ error: "You can only manage your own batch" });
+        .json({ error: "Only administrators can enroll students." });
+    }
     await Enrollment.deleteMany({
       student: studentId,
       batch: { $ne: req.params.id },
@@ -42,6 +40,45 @@ exports.enrollStudent = async (req, res) => {
         .json({ error: "Student already enrolled in this batch" });
     }
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.updateBatch = async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) return res.status(404).json({ error: "Batch not found" });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only administrators can edit batches." });
+    }
+
+    const { name, teacherId } = req.body;
+    if (name !== undefined) {
+      if (!String(name).trim())
+        return res.status(400).json({ error: "Batch name is required." });
+      batch.name = String(name).trim();
+    }
+    if (teacherId !== undefined) batch.teacher = teacherId;
+
+    await batch.save();
+    res.json(await batch.populate("teacher", "name email"));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+exports.deleteBatch = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only administrators can delete batches." });
+    }
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) return res.status(404).json({ error: "Batch not found" });
+
+    await Enrollment.deleteMany({ batch: batch._id });
+    await batch.deleteOne();
+    res.json({ message: "Batch deleted successfully." });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 };
 

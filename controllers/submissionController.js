@@ -17,6 +17,12 @@ const removeUploadedFile = async (file) => {
   if (file?.path) await removeFile(file.path);
 };
 
+const isExpired = (assignment, now = new Date()) =>
+  Boolean(
+    assignment?.dueDate &&
+      new Date(assignment.dueDate).getTime() <= now.getTime(),
+  );
+
 const validateUploadedArchive = async (file, assignment) => {
   if (!file) throw new AppError("No file uploaded.", 400);
   if (!(await isZipFile(file.path)))
@@ -49,10 +55,15 @@ exports.createSubmission = async (req, res, next) => {
   try {
     const { assignmentId } = req.body;
     const assignment = await Assignment.findById(assignmentId);
-    if (!assignment || !assignment.active)
-      throw new AppError("Assignment not found.", 404);
-    if (new Date(assignment.dueDate) <= new Date())
+    if (!assignment) throw new AppError("Assignment not found.", 404);
+    if (!assignment.active || isExpired(assignment)) {
+      if (isExpired(assignment)) {
+        assignment.active = false;
+        assignment.closedAt = assignment.closedAt || new Date();
+        await assignment.save();
+      }
       throw new AppError("This assignment has expired.", 410);
+    }
 
     await ensureStudentEnrollment(assignment, req.user.userId);
     await validateUploadedArchive(req.file, assignment);
@@ -95,15 +106,19 @@ exports.updateSubmission = async (req, res, next) => {
     if (!submission) throw new AppError("Submission not found.", 404);
 
     const assignment = submission.assignment;
-    if (!assignment.active)
-      throw new AppError("This assignment is closed.", 410);
+    if (!assignment.active || isExpired(assignment)) {
+      if (isExpired(assignment)) {
+        assignment.active = false;
+        assignment.closedAt = assignment.closedAt || new Date();
+        await assignment.save();
+      }
+      throw new AppError("This assignment has expired.", 410);
+    }
     if (assignment.resubmissionPolicy === "disabled")
       throw new AppError(
         "Resubmissions are disabled for this assignment.",
         403,
       );
-    if (new Date(assignment.dueDate) <= new Date())
-      throw new AppError("This assignment has expired.", 410);
 
     await ensureStudentEnrollment(assignment, req.user.userId);
     await validateUploadedArchive(req.file, assignment);

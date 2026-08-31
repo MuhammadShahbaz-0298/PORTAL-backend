@@ -11,7 +11,7 @@ const {
 
 const signToken = (user) =>
   jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: process.env.JWT_EXPIRES_IN || "10m",
   });
 
 const getEffectivePermissions = async (user) => {
@@ -77,10 +77,18 @@ const loginUser = async ({ email, password }) => {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail || !password)
     throw new AppError("Email and password are required.", 400);
+
   const user = await User.findOne({ email: normalizedEmail });
-  if (!user || !user.active || !(await user.comparePassword(password))) {
-    throw new AppError("Invalid credentials or inactive account.", 401);
+  if (!user) throw new AppError("Invalid credentials.", 401);
+  if (!user.active)
+    throw new AppError(
+      "Your account has been suspended or banned. Please contact your administrator.",
+      403,
+    );
+  if (!(await user.comparePassword(password))) {
+    throw new AppError("Invalid credentials.", 401);
   }
+
   return { token: signToken(user), user: await toSafeUser(user) };
 };
 
