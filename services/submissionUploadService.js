@@ -81,7 +81,6 @@ async function createSubmission({ requester, assignmentId, file }) {
       fileName: sanitizeDisplayFileName(file.originalname),
       fileSize: file.size,
       mimeType: file.mimetype,
-      attempt: 1,
     });
 
     return submission.populate(["assignment", "batch", "student"]);
@@ -105,10 +104,6 @@ async function updateSubmission({ requester, submissionId, file }) {
   const assignment = submission.assignment;
   if (!assignment.active || assignmentService.isExpired(assignment)) {
     throw new AppError("This assignment has expired.", 410);
-  }
-
-  if (assignment.resubmissionPolicy === "disabled") {
-    throw new AppError("Resubmissions are disabled for this assignment.", 403);
   }
 
   try {

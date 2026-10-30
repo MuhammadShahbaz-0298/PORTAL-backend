@@ -131,7 +131,6 @@ test("a teacher cannot grade another teacher's submission", async () => {
     filePath: "dummy.zip",
     fileName: "dummy.zip",
     fileSize: 100,
-    attempt: 1,
   });
 
   const teacherBClient = await loginAs("teacher.b@example.test");

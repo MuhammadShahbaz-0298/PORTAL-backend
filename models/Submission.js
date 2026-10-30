@@ -35,7 +35,6 @@ const submissionSchema = new mongoose.Schema(
     fileName: { type: String, required: true, maxlength: 255 },
     fileSize: { type: Number, required: true, min: 1, max: GLOBAL_UPLOAD_MAX_BYTES },
     mimeType: { type: String, default: "application/zip", maxlength: 100 },
-    attempt: { type: Number, required: true, min: 1, max: 1 },
     status: {
       type: String,
       enum: SUBMISSION_STATUSES,
