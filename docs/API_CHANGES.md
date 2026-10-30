@@ -197,6 +197,45 @@ Changing a role or a user's extra permissions takes effect on the next request.
 A demoted user does not need to log in again, and the frontend should re-fetch
 `GET /api/auth/me` after admin changes.
 
+## 17. Admin password reset — additive
+
+New endpoint: `PATCH /api/users/:id/reset-password` (no body). Requires
+authentication and `users.manage`.
+
+- An admin may reset **another** user's password; resetting their own returns
+  `400`.
+- The response is `200 { "temporaryPassword": "..." }`, a random 12-character
+  password with uppercase, lowercase, a digit and a special character.
+- Only the bcrypt hash is stored. The plain password is returned exactly once
+  and is never logged.
+- The target user's `mustChangePassword` field is set to `true`, and all of that
+  user's sessions are revoked immediately.
+- A security event `admin_password_reset` is logged with the target `userId` and
+  the admin's id only.
+
+While `mustChangePassword` is `true`, every authenticated route except
+`POST /api/auth/change-password` returns:
+
+```json
+{
+  "success": false,
+  "error": "You must change your password before continuing."
+}
+```
+
+A successful `POST /api/auth/change-password` clears the flag in the same
+request, so the user can continue normally. Existing endpoint response shapes are
+unchanged; `mustChangePassword` is not added to login or user responses.
+
+Frontend changes:
+
+1. Show the temporary password **once** after a successful reset, with a copy
+   button and a clear warning that it will not be shown again. The admin passes
+   it to the user manually — there is no email and no link.
+2. Catch the new `403` message above on any request, stop retrying, and send the
+   user to the change-password screen.
+3. After a successful password change, resume normal navigation.
+
 ## Frontend checklist
 
 - [ ] `credentials: "include"` on every API call.
@@ -208,4 +247,17 @@ A demoted user does not need to log in again, and the frontend should re-fetch
 - [ ] Treat delete as archive in the UI.
 - [ ] Read `X-Total-Count` for pagination.
 - [ ] Update error parsing to `error` / `details`.
+- [ ] Show a reset temporary password once; never store or log it.
+- [ ] Catch the `mustChangePassword` 403 and redirect to change-password.
 - [ ] Confirm the API is HTTPS and `FRONTEND_URL` is exact.
+
+## Frontend changes applied
+
+- Added cookie credentials, the CSRF request header, global 401 refresh/retry, and the forced-password redirect in `src/api/client.js`.
+- Added `refresh`, `logoutSession`, and `logoutAll` calls in `src/api/auth.js`.
+- Reworked login, logout, hydrate, and refresh to use server cookies and removed token/user storage in `src/store/actions/authActions.js`.
+- Removed the token and saved user from the initial auth state and reducer in `src/store/index.js`.
+- Changed the loading guard and inactivity check to use the Redux user instead of the token in `src/components/layout/AppLayout.jsx`.
+- Added the standalone forced password change page and its public `/force-change-password` route in `src/features/auth/ForceChangePasswordPage.jsx` and `src/routes/index.jsx`.
+- Added the `resetPassword` API call in `src/api/users.js`.
+- Added the admin reset-password action button, confirmation, and one-time credential warning in `src/features/users/UsersPage.jsx`.

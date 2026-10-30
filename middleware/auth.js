@@ -7,9 +7,16 @@ const asyncHandler = require("../utils/asyncHandler");
 const { getAccessToken, clearAuthCookies } = require("../utils/cookies");
 const { readAuthSettings, readCookieSettings } = require("../config/auth");
 const { logSecurityEvent } = require("../utils/securityLog");
+const { CHANGE_PASSWORD_ENDPOINT } = require("../constants/auth");
 const tokenService = require("../services/tokenService");
 const sessionService = require("../services/sessionService");
 const { getEffectivePermissions } = require("../services/permissionService");
+
+// The temporary-password block must not lock the user out of changing it.
+function isChangePasswordRequest(request) {
+  const requestPath = request.originalUrl.split("?")[0].replace(/\/+$/, "");
+  return request.method === "POST" && requestPath === CHANGE_PASSWORD_ENDPOINT;
+}
 
 const auth = asyncHandler(async (request, response, next) => {
   const accessToken = getAccessToken(request);
@@ -50,6 +57,11 @@ const auth = asyncHandler(async (request, response, next) => {
     clearAuthCookies(response, readCookieSettings());
     logSecurityEvent("disabled_user_rejected", { userId: String(session.user) });
     throw new AppError("Account is not active.", 401);
+  }
+
+  // A reset account may only change its password until the flag is cleared.
+  if (user.mustChangePassword && !isChangePasswordRequest(request)) {
+    throw new AppError("You must change your password before continuing.", 403);
   }
 
   await sessionService.touchSession(session, authSettings);

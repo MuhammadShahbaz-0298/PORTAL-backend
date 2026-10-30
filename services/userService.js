@@ -21,6 +21,8 @@ const {
 } = require("../utils/validation");
 const { buildSearchFilter } = require("../utils/search");
 const { getPagination } = require("../utils/pagination");
+const { generateTemporaryPassword } = require("../utils/temporaryPassword");
+const { logSecurityEvent } = require("../utils/securityLog");
 
 async function listUsers({ requester, query }) {
   const pagination = getPagination(query);
@@ -126,6 +128,35 @@ async function updateUser({ requester, userId, payload }) {
   return user.toSafeJSON();
 }
 
+async function resetPassword(requester, targetUserId) {
+  assertObjectId(targetUserId, "user id");
+
+  if (String(targetUserId) === String(getUserId(requester))) {
+    throw new AppError("You cannot reset your own password this way.", 400);
+  }
+
+  const user = await User.findById(targetUserId);
+
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+
+  const temporaryPassword = generateTemporaryPassword();
+
+  // The User model's pre-save hook hashes this before it reaches MongoDB.
+  user.password = temporaryPassword;
+  user.mustChangePassword = true;
+  await user.save();
+
+  await sessionService.revokeAllForUser(user._id);
+  logSecurityEvent("admin_password_reset", {
+    userId: String(user._id),
+    triggeredBy: String(getUserId(requester)),
+  });
+
+  return temporaryPassword;
+}
+
 async function deleteUser({ requester, userId }) {
   assertObjectId(userId, "user id");
 
@@ -147,4 +178,4 @@ async function deleteUser({ requester, userId }) {
   return { message: "User archived successfully." };
 }
 
-module.exports = { listUsers, updateUser, deleteUser };
+module.exports = { listUsers, updateUser, resetPassword, deleteUser };

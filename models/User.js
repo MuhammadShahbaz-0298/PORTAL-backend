@@ -40,6 +40,8 @@ const userSchema = new mongoose.Schema(
     },
     // Extra permissions on top of the role. Only admins may change this.
     permissions: { type: [String], default: [] },
+    // Set by an admin password reset; cleared after the user changes it.
+    mustChangePassword: { type: Boolean, default: false },
     // Soft delete: inactive users stay in the database but cannot log in.
     active: { type: Boolean, default: true },
     archivedAt: { type: Date, default: null },

@@ -33,4 +33,7 @@ const AUTH_COOKIES = Object.freeze({
   REFRESH_PATH: "/api/auth",
 });
 
-module.exports = { AUTH_LIMITS, AUTH_COOKIES };
+// A user with a temporary password may call only this route.
+const CHANGE_PASSWORD_ENDPOINT = "/api/auth/change-password";
+
+module.exports = { AUTH_LIMITS, AUTH_COOKIES, CHANGE_PASSWORD_ENDPOINT };

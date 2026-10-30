@@ -23,6 +23,7 @@ async function changePassword({ userId, currentPassword, newPassword, currentSes
 
   assertPassword(newPassword);
   user.password = newPassword;
+  user.mustChangePassword = false;
   await user.save();
   await sessionService.revokeOtherSessions(userId, currentSessionId);
   logSecurityEvent("password_changed", { userId: String(user._id) });

@@ -266,6 +266,30 @@ Behavior:
 
 Returns the updated user document.
 
+### `PATCH /api/users/:id/reset-password`
+
+Permission: `users.manage`. Body: none.
+
+Generates a random 12-character temporary password, stores only its bcrypt hash,
+sets `mustChangePassword: true`, and revokes every active session for that user.
+
+`200`
+
+```json
+{ "temporaryPassword": "Abc1!xyz9Qr2" }
+```
+
+- The plain password is returned **once**; it is never stored or logged.
+- A security event is logged with the target `userId` and the admin who
+  triggered it. The password itself is not logged.
+- `404` if the user does not exist.
+- `400` if the admin tries to reset their own password this way.
+- `403` without `users.manage`.
+
+Until the user changes this password, every authenticated route except
+`POST /api/auth/change-password` returns `403` with
+`"You must change your password before continuing."`.
+
 ### `DELETE /api/users/:id`
 
 Permission: `users.manage`.
