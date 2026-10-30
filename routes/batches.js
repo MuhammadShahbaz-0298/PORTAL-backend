@@ -1,31 +1,25 @@
+// Routes for batches and enrollment. Ownership is checked inside the service.
+
 const express = require("express");
-const router = express.Router();
 const auth = require("../middleware/auth");
 const requirePermission = require("../middleware/requirePermission");
 const {
+  getBatches,
   createBatch,
-  enrollStudent,
   updateBatch,
   deleteBatch,
-  getBatches,
+  enrollStudent,
   getBatchStudents,
 } = require("../controllers/batchController");
 
-router.get("/", auth, requirePermission("batches.view"), getBatches);
-router.post("/", auth, requirePermission("batches.create"), createBatch);
-router.patch("/:id", auth, requirePermission("batches.update"), updateBatch);
-router.delete("/:id", auth, requirePermission("batches.delete"), deleteBatch);
-router.post(
-  "/:id/enroll",
-  auth,
-  requirePermission("batches.enroll"),
-  enrollStudent,
-);
-router.get(
-  "/:id/students",
-  auth,
-  requirePermission("batches.enroll"),
-  getBatchStudents,
-);
+const router = express.Router();
+
+router.use(auth);
+router.get("/", requirePermission("batches.view"), getBatches);
+router.post("/", requirePermission("batches.create"), createBatch);
+router.patch("/:id", requirePermission("batches.update"), updateBatch);
+router.delete("/:id", requirePermission("batches.delete"), deleteBatch);
+router.post("/:id/enroll", requirePermission("batches.enroll"), enrollStudent);
+router.get("/:id/students", requirePermission("batches.view"), getBatchStudents);
 
 module.exports = router;

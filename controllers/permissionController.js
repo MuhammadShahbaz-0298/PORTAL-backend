@@ -1,41 +1,19 @@
-const User = require("../models/User");
-const {
-  PERMISSIONS,
-  ROLE_DEFAULTS,
-  normalizePermissions,
-} = require("../config/permissions");
-const { AppError } = require("../utils/errors");
-const { assertObjectId } = require("../utils/validation");
+// HTTP layer for the permission catalog and per-user extra permissions.
 
-exports.catalog = (req, res) =>
-  res.json({ permissions: PERMISSIONS, roleDefaults: ROLE_DEFAULTS });
+const { PERMISSIONS, ROLE_DEFAULTS } = require("../config/permissions");
+const permissionService = require("../services/permissionService");
+const asyncHandler = require("../utils/asyncHandler");
 
-exports.updateUserPermissions = async (req, res, next) => {
-  try {
-    assertObjectId(req.params.id, "user id");
-    if (!Array.isArray(req.body.permissions))
-      throw new AppError("Permissions must be an array.", 400);
-
-    const sanitizedPermissions = normalizePermissions(req.body.permissions);
-    const invalidPermissions = req.body.permissions.filter(
-      (permission) => !PERMISSIONS.includes(String(permission).trim()),
-    );
-
-    if (invalidPermissions.length && sanitizedPermissions.length === 0)
-      throw new AppError(
-        "One or more permissions are invalid.",
-        400,
-        invalidPermissions,
-      );
-
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { permissions: sanitizedPermissions },
-      { new: true, runValidators: true },
-    ).select("-password");
-    if (!user) throw new AppError("User not found.", 404);
-    return res.json(user);
-  } catch (error) {
-    return next(error);
-  }
+const catalog = (request, response) => {
+  return response.json({ permissions: PERMISSIONS, roleDefaults: ROLE_DEFAULTS });
 };
+
+const updateUserPermissions = asyncHandler(async (request, response) => {
+  const user = await permissionService.updateUserPermissions({
+    userId: request.params.id,
+    permissions: request.body.permissions,
+  });
+  return response.json(user);
+});
+
+module.exports = { catalog, updateUserPermissions };

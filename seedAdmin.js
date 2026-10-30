@@ -1,33 +1,50 @@
-// One-time script to create the very first admin account, since /api/auth/register
-// now requires an admin token — someone has to exist before that route is usable.
-//
-// Usage:  node seedAdmin.js "Admin Name" admin@example.com somePassword123
-//
-// Run this once, then delete or ignore this file. Do not expose it as an API route.
+// Creates the very first admin account.
+// All values come from environment variables. The password is never read from argv.
 
 require("dotenv").config();
+
 const mongoose = require("mongoose");
 const User = require("./models/User");
+const { ROLES, NAME_MAX_LENGTH } = require("./constants");
+const { assertEmail, assertPassword, assertString } = require("./utils/validation");
 
-const [, , name, email, password] = process.argv;
-
-if (!name || !email || !password) {
-  console.error(
-    'Usage: node seedAdmin.js "Admin Name" admin@example.com password123',
-  );
-  process.exit(1);
-}
-
-(async () => {
-  await mongoose.connect(process.env.MONGO_URI);
-
-  const existing = await User.findOne({ email });
-  if (existing) {
-    console.log("A user with that email already exists.");
-    process.exit(0);
+function readAdminDetails() {
+  if (!process.env.ADMIN_NAME || !process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+    throw new Error("Set ADMIN_NAME, ADMIN_EMAIL and ADMIN_PASSWORD before running this script.");
   }
 
-  const admin = await User.create({ name, email, password, role: "admin" });
-  console.log(`Admin created: ${admin.email}`);
-  process.exit(0);
-})();
+  return {
+    name: assertString(process.env.ADMIN_NAME, "admin name", { maxLength: NAME_MAX_LENGTH }),
+    email: assertEmail(process.env.ADMIN_EMAIL),
+    password: assertPassword(process.env.ADMIN_PASSWORD, "Admin password"),
+  };
+}
+
+async function main() {
+  const details = readAdminDetails();
+  await mongoose.connect(process.env.MONGO_URI);
+
+  const existingUser = await User.findOne({ email: details.email });
+  if (existingUser) {
+    console.info("A user with that email already exists.");
+    await mongoose.disconnect();
+    return;
+  }
+
+  const admin = await User.create({
+    name: details.name,
+    email: details.email,
+    password: details.password,
+    role: ROLES.ADMIN,
+    active: true,
+  });
+
+  console.info(`Admin created: ${admin.email}`);
+  await mongoose.disconnect();
+}
+
+main().catch(async (error) => {
+  console.error(error.message);
+  await mongoose.disconnect();
+  process.exit(1);
+});

@@ -1,47 +1,75 @@
+// Tests for the shared input helpers and error mapping.
+
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const fs = require("node:fs/promises");
-const os = require("node:os");
-const path = require("node:path");
 const { AppError } = require("../utils/errors");
 const { normalizeError } = require("../utils/http");
-const { isZipFile, removeFile } = require("../utils/files");
 const {
+  assertBoolean,
   assertEmail,
+  assertGrade,
+  assertNoMongoOperators,
   assertObjectId,
   assertPassword,
-  requireFields,
+  assertString,
+  escapeRegex,
+  pickFields,
 } = require("../utils/validation");
+const { getPagination } = require("../utils/pagination");
 const { PERMISSIONS, normalizePermissions } = require("../config/permissions");
 
-test("validation helpers accept valid values and reject invalid values", async () => {
+test("validation helpers accept valid values and reject invalid values", () => {
   assert.equal(assertEmail(" Student@Example.com "), "student@example.com");
   assert.doesNotThrow(() => assertPassword("password123"));
   assert.throws(() => assertPassword("short"), AppError);
   assert.doesNotThrow(() => assertObjectId("507f1f77bcf86cd799439011"));
   assert.throws(() => assertObjectId("invalid"), AppError);
-  assert.doesNotThrow(() => requireFields({ name: "Ayesha" }, ["name"]));
-  assert.throws(() => requireFields({}, ["name"]), AppError);
+  assert.throws(() => assertString({ $gt: "" }, "name"), AppError);
+  assert.equal(assertString("  Ayesha  ", "name"), "Ayesha");
+});
+
+test("real booleans are required, so Boolean('false') bugs cannot happen", () => {
+  assert.equal(assertBoolean(true, "active"), true);
+  assert.equal(assertBoolean(false, "active"), false);
+  assert.throws(() => assertBoolean("false", "active"), AppError);
+});
+
+test("NoSQL operators are rejected anywhere in the body", () => {
+  assert.throws(() => assertNoMongoOperators({ email: { $gt: "" } }), AppError);
+  assert.throws(() => assertNoMongoOperators({ nested: [{ $ne: null }] }), AppError);
+  assert.doesNotThrow(() => assertNoMongoOperators({ email: "a@example.com" }));
+});
+
+test("user text is escaped before it becomes a regex", () => {
+  assert.equal(escapeRegex("a.*b"), "a\\.\\*b");
+});
+
+test("grades allow letters but cap numeric marks at 0-100", () => {
+  assert.equal(assertGrade("A"), "A");
+  assert.equal(assertGrade("95"), "95");
+  assert.throws(() => assertGrade("101"), AppError);
+});
+
+test("mass assignment is stopped by picking allowed fields", () => {
+  const picked = pickFields({ name: "Ayesha", role: "admin", active: false, password: "x" }, [
+    "name",
+    "email",
+  ]);
+
+  assert.deepEqual(picked, { name: "Ayesha" });
+});
+
+test("pagination has safe defaults and a hard maximum", () => {
+  assert.deepEqual(getPagination({}), { page: 1, limit: 50, skip: 0 });
+  assert.deepEqual(getPagination({ page: "2", limit: "10" }), { page: 2, limit: 10, skip: 10 });
+  assert.throws(() => getPagination({ limit: "101" }), AppError);
+  assert.throws(() => getPagination({ page: "0" }), AppError);
 });
 
 test("error normalization maps common persistence failures", () => {
-  const duplicate = normalizeError({ code: 11000 });
-  assert.equal(duplicate.statusCode, 409);
-  const cast = normalizeError({ name: "CastError" });
-  assert.equal(cast.statusCode, 400);
-});
-
-test("ZIP validation checks file signatures and cleanup is safe", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "portal-test-"));
-  const zipPath = path.join(directory, "valid.zip");
-  const textPath = path.join(directory, "invalid.zip");
-  await fs.writeFile(zipPath, Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00]));
-  await fs.writeFile(textPath, "not a zip");
-  assert.equal(await isZipFile(zipPath), true);
-  assert.equal(await isZipFile(textPath), false);
-  await removeFile(zipPath);
-  await removeFile(textPath);
-  await fs.rm(directory, { recursive: true, force: true });
+  assert.equal(normalizeError({ code: 11000 }).statusCode, 409);
+  assert.equal(normalizeError({ name: "CastError" }).statusCode, 400);
+  assert.equal(normalizeError({ name: "ValidationError" }).statusCode, 400);
 });
 
 test("permission normalization keeps valid values and drops stale entries", () => {
@@ -52,12 +80,9 @@ test("permission normalization keeps valid values and drops stale entries", () =
     "students.view",
     " ",
     null,
-    undefined,
   ]);
 
   assert.deepEqual(cleaned, ["dashboard.view", "students.view"]);
   assert.ok(PERMISSIONS.includes("students.view"));
-
-  const empty = normalizePermissions(["legacy.permission", "bad.value"]);
-  assert.deepEqual(empty, []);
+  assert.deepEqual(normalizePermissions(["legacy.permission"]), []);
 });

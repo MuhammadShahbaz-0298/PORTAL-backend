@@ -1,128 +1,62 @@
-const Batch = require("../models/Batch");
-const Enrollment = require("../models/Enrollment");
-const Attendance = require("../models/Attendance");
+// HTTP layer for batches and enrollment.
 
-// POST /api/batches  (admin only)
-exports.createBatch = async (req, res) => {
-  try {
-    const { name, teacherId } = req.body;
-    const batch = await Batch.create({ name, teacher: teacherId });
-    res.status(201).json(batch);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+const batchService = require("../services/batchService");
+const asyncHandler = require("../utils/asyncHandler");
+const { sendPaginatedList } = require("../utils/pagination");
 
-// POST /api/batches/:id/enroll  (admin only)
-exports.enrollStudent = async (req, res) => {
-  try {
-    const { studentId } = req.body;
-    const targetBatch = await Batch.findById(req.params.id);
-    if (!targetBatch) return res.status(404).json({ error: "Batch not found" });
-    await Enrollment.deleteMany({
-      student: studentId,
-      batch: { $ne: req.params.id },
-    });
-    const enrollment = await Enrollment.findOneAndUpdate(
-      { student: studentId, batch: req.params.id },
-      { student: studentId, batch: req.params.id },
-      { upsert: true, new: true },
-    );
-    res.status(201).json(enrollment);
-  } catch (err) {
-    if (err.code === 11000) {
-      return res
-        .status(409)
-        .json({ error: "Student already enrolled in this batch" });
-    }
-    res.status(500).json({ error: err.message });
-  }
-};
+const getBatches = asyncHandler(async (request, response) => {
+  const result = await batchService.listBatches({ requester: request.user, query: request.query });
+  return sendPaginatedList(response, result.items, result.pagination, result.total);
+});
 
-exports.updateBatch = async (req, res) => {
-  try {
-    const batch = await Batch.findById(req.params.id);
-    if (!batch) return res.status(404).json({ error: "Batch not found" });
-    const { name, teacherId } = req.body;
-    if (name !== undefined) {
-      if (!String(name).trim())
-        return res.status(400).json({ error: "Batch name is required." });
-      batch.name = String(name).trim();
-    }
-    if (teacherId !== undefined) batch.teacher = teacherId;
+const createBatch = asyncHandler(async (request, response) => {
+  const batch = await batchService.createBatch({
+    requester: request.user,
+    payload: request.body,
+  });
+  return response.status(201).json(batch);
+});
 
-    await batch.save();
-    res.json(await batch.populate("teacher", "name email"));
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-};
+const updateBatch = asyncHandler(async (request, response) => {
+  const batch = await batchService.updateBatch({
+    requester: request.user,
+    batchId: request.params.id,
+    payload: request.body,
+  });
+  return response.json(batch);
+});
 
-exports.deleteBatch = async (req, res) => {
-  try {
-    const batch = await Batch.findById(req.params.id);
-    if (!batch) return res.status(404).json({ error: "Batch not found" });
+const deleteBatch = asyncHandler(async (request, response) => {
+  const result = await batchService.deleteBatch({
+    requester: request.user,
+    batchId: request.params.id,
+  });
+  return response.json(result);
+});
 
-    await Attendance.updateMany(
-      { batch: batch._id },
-      { $set: { batchName: batch.name } },
-    );
-    await Enrollment.deleteMany({ batch: batch._id });
-    await batch.deleteOne();
-    res.json({ message: "Batch deleted successfully." });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-};
+const enrollStudent = asyncHandler(async (request, response) => {
+  const enrollment = await batchService.enrollStudent({
+    requester: request.user,
+    batchId: request.params.id,
+    payload: request.body,
+  });
+  return response.status(201).json(enrollment);
+});
 
-// GET /api/batches  (scoped by role)
-exports.getBatchStudents = async (req, res) => {
-  try {
-    const enrollments = await Enrollment.find({ batch: req.params.id })
-      .populate("student", "name email role active")
-      .sort({ createdAt: 1 });
-    res.json(
-      enrollments.map((enrollment) => enrollment.student).filter(Boolean),
-    );
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+const getBatchStudents = asyncHandler(async (request, response) => {
+  const result = await batchService.getBatchStudents({
+    requester: request.user,
+    batchId: request.params.id,
+    query: request.query,
+  });
+  return sendPaginatedList(response, result.items, result.pagination, result.total);
+});
 
-exports.getBatches = async (req, res) => {
-  try {
-    let batches;
-
-    if (req.user.role === "admin") {
-      batches = await Batch.find().populate("teacher", "name email");
-    } else if (req.user.role === "teacher") {
-      batches = await Batch.find({ teacher: req.user.userId }).populate(
-        "teacher",
-        "name email",
-      );
-    } else if (req.user.role === "student") {
-      const enrollments = await Enrollment.find({
-        student: req.user.userId,
-      }).populate({
-        path: "batch",
-        populate: { path: "teacher", select: "name email" },
-      });
-      batches = enrollments.map((e) => e.batch);
-    } else {
-      batches = [];
-    }
-
-    const batchesWithCounts = await Promise.all(
-      (batches || []).filter(Boolean).map(async (batch) => {
-        const value = batch.toObject ? batch.toObject() : batch;
-        value.studentCount = await Enrollment.countDocuments({
-          batch: value._id,
-        });
-        return value;
-      }),
-    );
-    res.json(batchesWithCounts);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+module.exports = {
+  getBatches,
+  createBatch,
+  updateBatch,
+  deleteBatch,
+  enrollStudent,
+  getBatchStudents,
 };

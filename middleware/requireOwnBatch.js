@@ -1,28 +1,38 @@
+// Only a teacher who owns the submission's batch, or an admin, may grade it.
+// Admins bypass ownership. Everyone else is checked against the database.
+
+const mongoose = require("mongoose");
 const Submission = require("../models/Submission");
 const { AppError } = require("../utils/errors");
-const { getUserId, isAdmin } = require("../utils/authorization");
+const asyncHandler = require("../utils/asyncHandler");
+const { getUserId, isAdmin, isTeacher } = require("../utils/authorization");
 
-// Teachers may access submissions only when the related batch belongs to them; admins bypass ownership.
-const requireOwnBatch = async (req, res, next) => {
-  try {
-    if (isAdmin(req.user)) return next();
-
-    const submission = await Submission.findById(req.params.id).populate(
-      "batch",
-    );
-    if (!submission) return next(new AppError("Submission not found.", 404));
-    if (
-      !submission.batch ||
-      String(submission.batch.teacher) !== String(getUserId(req.user))
-    ) {
-      return next(new AppError("You do not have access to this batch.", 403));
-    }
-
-    req.submission = submission;
-    return next();
-  } catch (error) {
-    return next(error);
+const requireOwnSubmission = asyncHandler(async (request, response, next) => {
+  if (!mongoose.isValidObjectId(request.params.id)) {
+    throw new AppError("Invalid submission id.", 400);
   }
-};
 
-module.exports = requireOwnBatch;
+  const submission = await Submission.findById(request.params.id).populate("batch", "teacher");
+
+  if (!submission) {
+    throw new AppError("Submission not found.", 404);
+  }
+
+  if (isAdmin(request.user)) {
+    request.submission = submission;
+    return next();
+  }
+
+  if (
+    isTeacher(request.user) &&
+    submission.batch &&
+    String(submission.batch.teacher) === String(getUserId(request.user))
+  ) {
+    request.submission = submission;
+    return next();
+  }
+
+  throw new AppError("You do not have access to this submission.", 403);
+});
+
+module.exports = requireOwnSubmission;

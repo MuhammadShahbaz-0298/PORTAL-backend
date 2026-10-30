@@ -1,92 +1,31 @@
-const User = require("../models/User");
-const Enrollment = require("../models/Enrollment");
-const Attendance = require("../models/Attendance");
-const Submission = require("../models/Submission");
-const { AppError } = require("../utils/errors");
-const { getUserId } = require("../utils/authorization");
-const { normalizePermissions } = require("../config/permissions");
-const {
-  assertEmail,
-  assertObjectId,
-  assertPassword,
-  normalizeEmail,
-} = require("../utils/validation");
+// HTTP layer for the user list, user updates and soft delete.
 
-exports.listUsers = async (req, res, next) => {
-  try {
-    const filter = req.query.role
-      ? { role: String(req.query.role).trim().toLowerCase() }
-      : {};
-    const users = await User.find(filter).select("-password").sort({ name: 1 });
-    return res.json(users);
-  } catch (error) {
-    return next(error);
-  }
-};
+const userService = require("../services/userService");
+const asyncHandler = require("../utils/asyncHandler");
+const { sendPaginatedList } = require("../utils/pagination");
 
-exports.updateUser = async (req, res, next) => {
-  try {
-    assertObjectId(req.params.id, "user id");
-    const user = await User.findById(req.params.id);
-    if (!user) throw new AppError("User not found.", 404);
+const listUsers = asyncHandler(async (request, response) => {
+  const result = await userService.listUsers({ requester: request.user, query: request.query });
+  return sendPaginatedList(response, result.items, result.pagination, result.total);
+});
 
-    const { name, email, role, password, active, permissions, batchId } =
-      req.body;
-    if (name !== undefined) {
-      if (!String(name).trim())
-        throw new AppError("Name cannot be empty.", 400);
-      user.name = String(name).trim();
-    }
-    if (email !== undefined) user.email = assertEmail(email);
-    if (role !== undefined) user.role = String(role).trim().toLowerCase();
-    if (password) {
-      assertPassword(password);
-      user.password = password;
-    }
-    if (active !== undefined) user.active = Boolean(active);
-    if (permissions !== undefined) {
-      if (!Array.isArray(permissions))
-        throw new AppError("Permissions must be an array.", 400);
-      user.permissions = normalizePermissions(permissions);
-    }
+const updateUser = asyncHandler(async (request, response) => {
+  const user = await userService.updateUser({
+    requester: request.user,
+    userId: request.params.id,
+    payload: request.body,
+  });
 
-    await user.save();
-    if (batchId && user.role === "student") {
-      assertObjectId(batchId, "batch id");
-      await Enrollment.findOneAndUpdate(
-        { student: user._id, batch: batchId },
-        { student: user._id, batch: batchId },
-        { upsert: true, new: true, setDefaultsOnInsert: true },
-      );
-    }
+  return response.json(user);
+});
 
-    return res.json(user.toSafeJSON());
-  } catch (error) {
-    return next(error);
-  }
-};
+const deleteUser = asyncHandler(async (request, response) => {
+  const result = await userService.deleteUser({
+    requester: request.user,
+    userId: request.params.id,
+  });
 
-exports.deleteUser = async (req, res, next) => {
-  try {
-    assertObjectId(req.params.id, "user id");
-    if (String(req.params.id) === String(getUserId(req.user)))
-      throw new AppError("You cannot delete your own account.", 400);
-    const user = await User.findById(req.params.id).select("_id");
-    if (!user) throw new AppError("User not found.", 404);
+  return response.json(result);
+});
 
-    await Promise.all([
-      Enrollment.deleteMany({ student: user._id }),
-      Attendance.deleteMany({
-        $or: [{ student: user._id }, { enteredBy: user._id }],
-      }),
-      Submission.deleteMany({
-        $or: [{ student: user._id }, { gradedBy: user._id }],
-      }),
-      User.deleteOne({ _id: user._id }),
-    ]);
-
-    return res.json({ message: "User permanently deleted." });
-  } catch (error) {
-    return next(error);
-  }
-};
+module.exports = { listUsers, updateUser, deleteUser };

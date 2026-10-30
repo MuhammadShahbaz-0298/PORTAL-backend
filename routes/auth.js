@@ -1,19 +1,28 @@
+// Routes for authentication. Login and refresh are public, everything else needs a session.
+
 const express = require("express");
-const router = express.Router();
 const auth = require("../middleware/auth");
-const requireRole = require("../middleware/requireRole");
+const requirePermission = require("../middleware/requirePermission");
 const {
   register,
   login,
+  refresh,
+  logout,
+  logoutAll,
   getMe,
   changePassword,
 } = require("../controllers/authController");
 
-// Admin-only: creates student/teacher accounts and sets their initial password.
-// No public signup route — there is no "register yourself" flow in this app.
-router.post("/register", auth, requireRole("admin"), register);
+const router = express.Router();
 
+// Only admins and teachers with students.create may make accounts.
+router.post("/register", auth, requirePermission("students.create"), register);
 router.post("/login", login);
+router.post("/refresh", refresh);
+
+// Logout works from the refresh cookie, so it still works when the access token expired.
+router.post("/logout", logout);
+router.post("/logout-all", auth, logoutAll);
 router.get("/me", auth, getMe);
 router.post("/change-password", auth, changePassword);
 

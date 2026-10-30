@@ -1,46 +1,21 @@
-const User = require("../models/User");
-const Role = require("../models/Role");
-const { ROLE_DEFAULTS } = require("../config/permissions");
-const { AppError } = require("../utils/errors");
-const { getUserId } = require("../utils/authorization");
+// Checks permissions that the auth middleware already loaded fresh from MongoDB.
+// This file never reads the role or permissions from the token.
 
-const resolvePermissions = async (user) => {
-  const role = await Role.findOne({ name: user.role, active: true })
-    .select("permissions")
-    .lean();
-  return (
-    role?.permissions ||
-    (user.permissions?.length
-      ? user.permissions
-      : ROLE_DEFAULTS[user.role] || [])
-  );
-};
+const { AppError } = require("../utils/errors");
 
 const requirePermission =
   (...requiredPermissions) =>
-  async (req, res, next) => {
-    try {
-      const user = await User.findById(getUserId(req.user)).select(
-        "permissions role active",
-      );
-      if (!user || !user.active)
-        return next(new AppError("Active user account is required.", 403));
+  (request, response, next) => {
+    const currentPermissions = request.user?.permissions || [];
+    const hasEveryPermission = requiredPermissions.every((permission) =>
+      currentPermissions.includes(permission),
+    );
 
-      const permissions = await resolvePermissions(user);
-      if (
-        !requiredPermissions.every((permission) =>
-          permissions.includes(permission),
-        )
-      ) {
-        return next(
-          new AppError("You do not have the required permission.", 403),
-        );
-      }
-
-      return next();
-    } catch (error) {
-      return next(error);
+    if (!hasEveryPermission) {
+      return next(new AppError("You do not have the required permission.", 403));
     }
+
+    return next();
   };
 
 module.exports = requirePermission;

@@ -1,3 +1,5 @@
+// One error class and small helpers for turning database errors into HTTP errors.
+
 class AppError extends Error {
   constructor(message, statusCode = 500, details = undefined) {
     super(message);

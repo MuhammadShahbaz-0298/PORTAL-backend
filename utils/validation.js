@@ -1,52 +1,42 @@
-const mongoose = require("mongoose");
-const { AppError } = require("./errors");
+// The public validation entry point.
+// Every route imports from this file, so the same checks run everywhere.
+// Primitive checks live in valueChecks.js; person-specific checks live in identityChecks.js.
 
-const requireFields = (payload, fields) => {
-  const missing = fields.filter((field) => {
-    const value = payload?.[field];
-    return (
-      value === undefined ||
-      value === null ||
-      (typeof value === "string" && !value.trim())
-    );
-  });
-  if (missing.length)
-    throw new AppError(`Missing required fields: ${missing.join(", ")}.`, 400);
-};
+const { assertString } = require("./valueChecks");
+const { SEARCH_MAX_LENGTH } = require("../constants");
+const valueChecks = require("./valueChecks");
+const identityChecks = require("./identityChecks");
 
-const assertObjectId = (value, field = "id") => {
-  if (!mongoose.isValidObjectId(value))
-    throw new AppError(`Invalid ${field}.`, 400);
-  return value;
-};
+// Copy only the fields the route is allowed to change. This stops mass assignment.
+function pickFields(payload, allowedFields) {
+  const pickedFields = {};
 
-const normalizeEmail = (email) =>
-  String(email || "")
-    .trim()
-    .toLowerCase();
-const assertEmail = (email) => {
-  const normalized = normalizeEmail(email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized))
-    throw new AppError("A valid email address is required.", 400);
-  return normalized;
-};
+  for (const field of allowedFields) {
+    if (payload[field] !== undefined) {
+      pickedFields[field] = payload[field];
+    }
+  }
 
-const assertPassword = (password, field = "Password") => {
-  if (typeof password !== "string" || password.length < 8)
-    throw new AppError(`${field} must be at least 8 characters.`, 400);
-};
+  return pickedFields;
+}
 
-const assertEnum = (value, allowed, field) => {
-  if (!allowed.includes(value))
-    throw new AppError(`${field} must be one of: ${allowed.join(", ")}.`, 400);
-  return value;
-};
+// User text is never put into a regex as-is.
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertSearch(search) {
+  if (search === undefined || search === null || search === "") {
+    return "";
+  }
+
+  return assertString(search, "search", { maxLength: SEARCH_MAX_LENGTH });
+}
 
 module.exports = {
-  requireFields,
-  assertObjectId,
-  normalizeEmail,
-  assertEmail,
-  assertPassword,
-  assertEnum,
+  ...valueChecks,
+  ...identityChecks,
+  assertSearch,
+  escapeRegex,
+  pickFields,
 };

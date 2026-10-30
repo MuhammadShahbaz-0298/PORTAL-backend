@@ -1,101 +1,153 @@
-const jwt = require("jsonwebtoken");
+// Login, refresh and logout.
+// All token rotation and reuse detection lives here.
+
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
-const Role = require("../models/Role");
-const { ROLE_DEFAULTS } = require("../config/permissions");
+const { readAuthSettings } = require("../config/auth");
 const { AppError } = require("../utils/errors");
-const {
-  assertEmail,
-  assertPassword,
-  normalizeEmail,
-} = require("../utils/validation");
+const { normalizeEmail } = require("../utils/validation");
+const tokenService = require("./tokenService");
+const sessionService = require("./sessionService");
+const { toSafeUser } = require("./registrationService");
+const { checkLoginAllowed, recordLoginFailure, clearLoginFailures } = require("../utils/rateLimit");
+const { logSecurityEvent } = require("../utils/securityLog");
 
-const signToken = (user) =>
-  jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "10m",
+// A dummy hash makes "unknown email" take as long as "wrong password".
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("not-a-real-password", 10);
+
+function buildLoginError() {
+  return new AppError("Invalid email or password.", 401);
+}
+
+async function createLoginSession({ user, request, settings }) {
+  const family = sessionService.buildSessionFamily(settings);
+  const refreshToken = tokenService.createRefreshToken(settings);
+  const session = await sessionService.createSession({
+    userId: user._id,
+    refreshToken,
+    familyId: family.familyId,
+    familyCreatedAt: family.familyCreatedAt,
+    familyExpiresAt: family.familyExpiresAt,
+    request,
+    settings,
   });
+  const accessToken = tokenService.signAccessToken(user, session.sessionId, settings);
 
-const getEffectivePermissions = async (user) => {
-  const storedRole = await Role.findOne({ name: user.role, active: true })
-    .select("permissions")
-    .lean();
-  if (storedRole) return storedRole.permissions || [];
-  return user.permissions?.length
-    ? user.permissions
-    : ROLE_DEFAULTS[user.role] || [];
-};
+  return { accessToken, refreshToken };
+}
 
-const toSafeUser = async (user) => ({
-  id: user._id,
-  name: user.name,
-  email: user.email,
-  role: user.role,
-  active: user.active,
-  permissions: await getEffectivePermissions(user),
-});
-
-const validateRole = async (role) => {
-  const roleName = String(role || "")
-    .trim()
-    .toLowerCase();
-  if (
-    !ROLE_DEFAULTS[roleName] &&
-    !(await Role.exists({ name: roleName, active: true }))
-  ) {
-    throw new AppError("Role does not exist.", 400);
-  }
-  return roleName;
-};
-
-const registerUser = async ({
-  name,
-  email,
-  password,
-  role,
-  permissions,
-  active = true,
-}) => {
-  if (!String(name || "").trim()) throw new AppError("Name is required.", 400);
-  const normalizedEmail = assertEmail(email);
-  assertPassword(password);
-  const roleName = await validateRole(role);
-  if (await User.exists({ email: normalizedEmail }))
-    throw new AppError("Email already in use.", 409);
-
-  const user = await User.create({
-    name: String(name).trim(),
-    email: normalizedEmail,
-    password,
-    role: roleName,
-    permissions: Array.isArray(permissions) ? permissions : [],
-    active: Boolean(active),
-  });
-
-  return { token: signToken(user), user: await toSafeUser(user) };
-};
-
-const loginUser = async ({ email, password }) => {
+async function loginUser({ email, password, request }) {
+  const settings = readAuthSettings();
   const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail || !password)
-    throw new AppError("Email and password are required.", 400);
+  const ip = String(request.ip || "");
 
-  const user = await User.findOne({ email: normalizedEmail });
-  if (!user) throw new AppError("Invalid credentials.", 401);
-  if (!user.active)
-    throw new AppError(
-      "Your account has been suspended or banned. Please contact your administrator.",
-      403,
-    );
-  if (!(await user.comparePassword(password))) {
-    throw new AppError("Invalid credentials.", 401);
+  if (!normalizedEmail || typeof password !== "string") {
+    throw new AppError("Email and password are required.", 400);
   }
 
-  return { token: signToken(user), user: await toSafeUser(user) };
-};
+  const rateCheck = checkLoginAllowed(ip, normalizedEmail, settings);
+  if (!rateCheck.allowed) {
+    logSecurityEvent("login_rate_limited", { ip, email: normalizedEmail });
+    throw new AppError("Too many login attempts. Please try again later.", 429);
+  }
+
+  const user = await User.findOne({ email: normalizedEmail }).select("+password");
+
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    recordLoginFailure(ip, normalizedEmail, settings);
+    logSecurityEvent("login_failed", { ip, email: normalizedEmail });
+    throw buildLoginError();
+  }
+
+  const passwordMatches = await user.comparePassword(password);
+
+  if (!passwordMatches || !user.active) {
+    recordLoginFailure(ip, normalizedEmail, settings);
+    logSecurityEvent("login_failed", { ip, email: normalizedEmail, disabled: !user.active });
+    throw buildLoginError();
+  }
+
+  clearLoginFailures(ip, normalizedEmail);
+  const tokens = await createLoginSession({ user, request, settings });
+
+  return {
+    user: await toSafeUser(user),
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+  };
+}
+
+async function refreshSession({ refreshToken, request }) {
+  const settings = readAuthSettings();
+  sessionService.requireRefreshToken(refreshToken);
+  const session = await sessionService.findSessionByRefreshToken(refreshToken);
+
+  if (!session) {
+    throw new AppError("Session is invalid or expired.", 401);
+  }
+
+  // A token that was already replaced means someone is replaying an old token.
+  if (session.replacedBy) {
+    await sessionService.revokeFamily(session.familyId);
+    logSecurityEvent("refresh_token_reuse", {
+      userId: String(session.user),
+      familyId: session.familyId,
+    });
+    throw new AppError("Session is invalid or expired.", 401);
+  }
+
+  const sessionProblem = sessionService.getSessionProblem(session, settings);
+  if (sessionProblem) {
+    await sessionService.revokeSession(session._id);
+    throw new AppError("Session is invalid or expired.", 401);
+  }
+
+  const user = await User.findById(session.user);
+
+  if (!user || !user.active) {
+    await sessionService.revokeAllForUser(session.user);
+    logSecurityEvent("refresh_disabled_user", { userId: String(session.user) });
+    throw new AppError("Session is invalid or expired.", 401);
+  }
+
+  const newRefreshToken = tokenService.createRefreshToken(settings);
+  const rotatedSession = await sessionService.rotateSession({
+    session,
+    newRefreshToken,
+    request,
+    settings,
+  });
+
+  if (!rotatedSession) {
+    await sessionService.revokeFamily(session.familyId);
+    logSecurityEvent("refresh_token_reuse", {
+      userId: String(session.user),
+      familyId: session.familyId,
+    });
+    throw new AppError("Session is invalid or expired.", 401);
+  }
+
+  const accessToken = tokenService.signAccessToken(user, rotatedSession.sessionId, settings);
+
+  return {
+    user: await toSafeUser(user),
+    accessToken,
+    refreshToken: rotatedSession.refreshToken,
+  };
+}
+
+async function logoutSession(sessionId) {
+  await sessionService.revokeSession(sessionId);
+}
+
+async function logoutAllSessions(userId) {
+  await sessionService.revokeAllForUser(userId);
+}
 
 module.exports = {
-  signToken,
-  getEffectivePermissions,
-  toSafeUser,
-  registerUser,
   loginUser,
+  refreshSession,
+  logoutSession,
+  logoutAllSessions,
 };

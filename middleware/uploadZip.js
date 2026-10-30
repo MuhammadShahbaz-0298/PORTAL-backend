@@ -1,45 +1,47 @@
-const multer = require("multer");
-const path = require("path");
+// ZIP upload handling.
+// The stored file name is random, so a user's file name can never become a path.
+
+const crypto = require("crypto");
 const fs = require("fs");
-
-const uploadDir = path.resolve(
-  process.env.UPLOAD_DIR || path.join(__dirname, "..", "uploads"),
-);
-
-fs.mkdirSync(uploadDir, { recursive: true });
+const path = require("path");
+const multer = require("multer");
+const { AppError } = require("../utils/errors");
+const { getUploadRoot } = require("../utils/files");
+const {
+  ALLOWED_UPLOAD_EXTENSIONS,
+  ALLOWED_UPLOAD_MIME_TYPES,
+  GLOBAL_UPLOAD_MAX_BYTES,
+} = require("../constants");
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
+  destination: (request, file, callback) => {
+    const uploadRoot = getUploadRoot();
+    fs.mkdirSync(uploadRoot, { recursive: true });
+    callback(null, uploadRoot);
   },
-
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${req.user.userId}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
+  filename: (request, file, callback) => {
+    callback(null, `${crypto.randomUUID()}.zip`);
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const isZipExt = path.extname(file.originalname).toLowerCase() === ".zip";
+function fileFilter(request, file, callback) {
+  const extension = path.extname(file.originalname).toLowerCase();
+  const hasAllowedExtension = ALLOWED_UPLOAD_EXTENSIONS.includes(extension);
+  const hasAllowedMimeType = ALLOWED_UPLOAD_MIME_TYPES.includes(file.mimetype);
 
-  const isZipMime = [
-    "application/zip",
-    "application/x-zip-compressed",
-    "multipart/x-zip",
-  ].includes(file.mimetype);
-
-  if (isZipExt && isZipMime) {
-    return cb(null, true);
+  if (hasAllowedExtension && hasAllowedMimeType) {
+    return callback(null, true);
   }
 
-  cb(new Error("Only .zip files are allowed"));
-};
+  return callback(new AppError("Only .zip files are allowed.", 400));
+}
 
 const uploadZip = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024,
+    fileSize: GLOBAL_UPLOAD_MAX_BYTES,
+    files: 1,
   },
 });
 
