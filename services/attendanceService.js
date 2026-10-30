@@ -30,6 +30,9 @@ async function addAttendance({ requester, payload }) {
   const studentId = assertObjectId(fields.studentId, "student id");
   const batchId = assertObjectId(fields.batchId, "batch id");
   const date = startOfDay(fields.date);
+  if (getUserRole(requester) === ROLES.TEACHER && date > startOfDay(new Date())) {
+    throw new AppError("Attendance cannot be marked for a future date.", 400);
+  }
   const status = assertEnum(fields.status, ATTENDANCE_STATUSES, "status");
 
   await batchAccessService.assertCanManageBatch(requester, batchId);
@@ -115,6 +118,13 @@ async function updateAttendance({ requester, attendanceId, payload }) {
 
   if (fields.date !== undefined) {
     attendance.date = startOfDay(fields.date);
+  }
+
+  if (
+    getUserRole(requester) === ROLES.TEACHER &&
+    attendance.date > startOfDay(new Date())
+  ) {
+    throw new AppError("Attendance cannot be marked for a future date.", 400);
   }
 
   if (fields.status !== undefined) {
