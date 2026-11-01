@@ -21,4 +21,9 @@ const updateRole = asyncHandler(async (request, response) => {
   return response.json(role);
 });
 
-module.exports = { listRoles, createRole, updateRole };
+const deleteRole = asyncHandler(async (request, response) => {
+  const result = await roleService.deleteRole({ roleId: request.params.id });
+  return response.json(result);
+});
+
+module.exports = { listRoles, createRole, updateRole, deleteRole };

@@ -34,6 +34,14 @@ const deleteBatch = asyncHandler(async (request, response) => {
   return response.json(result);
 });
 
+const archiveBatch = asyncHandler(async (request, response) => {
+  const result = await batchService.archiveBatch({
+    requester: request.user,
+    batchId: request.params.id,
+  });
+  return response.json(result);
+});
+
 const enrollStudent = asyncHandler(async (request, response) => {
   const enrollment = await batchService.enrollStudent({
     requester: request.user,
@@ -56,6 +64,7 @@ module.exports = {
   getBatches,
   createBatch,
   updateBatch,
+  archiveBatch,
   deleteBatch,
   enrollStudent,
   getBatchStudents,

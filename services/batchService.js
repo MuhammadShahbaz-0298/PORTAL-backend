@@ -4,6 +4,9 @@
 const Batch = require("../models/Batch");
 const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
+const Attendance = require("../models/Attendance");
+const Assignment = require("../models/Assignment");
+const Submission = require("../models/Submission");
 const { ROLES, BATCH_NAME_MAX_LENGTH } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId, getUserRole } = require("../utils/authorization");
@@ -109,7 +112,7 @@ async function updateBatch({ requester, batchId, payload }) {
   return batch.populate("teacher", "name email");
 }
 
-async function deleteBatch({ requester, batchId }) {
+async function archiveBatch({ requester, batchId }) {
   assertObjectId(batchId, "batch id");
   await batchAccessService.assertCanManageBatch(requester, batchId);
   const batch = await Batch.findById(batchId);
@@ -123,6 +126,26 @@ async function deleteBatch({ requester, batchId }) {
   await batch.save();
 
   return { message: "Batch archived successfully." };
+}
+
+async function deleteBatch({ requester, batchId }) {
+  assertObjectId(batchId, "batch id");
+  await batchAccessService.assertCanManageBatch(requester, batchId);
+  const batch = await Batch.findById(batchId);
+  if (!batch) throw new AppError("Batch not found.", 404);
+
+  const references = await Promise.all([
+    Enrollment.exists({ batch: batch._id }),
+    Attendance.exists({ batch: batch._id }),
+    Assignment.exists({ batch: batch._id }),
+    Submission.exists({ batch: batch._id }),
+  ]);
+  if (references.some(Boolean)) {
+    throw new AppError("This batch has linked history or assignments. Archive it instead.", 409);
+  }
+
+  await batch.deleteOne();
+  return { message: "Batch deleted permanently." };
 }
 
 async function enrollStudent({ requester, batchId, payload }) {
@@ -155,6 +178,7 @@ module.exports = {
   getBatchStudents,
   createBatch,
   updateBatch,
+  archiveBatch,
   deleteBatch,
   enrollStudent,
 };

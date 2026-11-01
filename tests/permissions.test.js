@@ -8,6 +8,7 @@ const Batch = require("../models/Batch");
 const Enrollment = require("../models/Enrollment");
 const Assignment = require("../models/Assignment");
 const Submission = require("../models/Submission");
+const Role = require("../models/Role");
 const { ROLES } = require("../constants");
 const { resetLoginRateLimits } = require("../utils/rateLimit");
 
@@ -201,14 +202,100 @@ test("enrolling in a new batch keeps the student's other enrollments", async () 
   assert.ok(batchBEnrollment);
 });
 
-test("deleting a batch archives it instead of destroying history", async () => {
+test("archiving a batch preserves history and permanent deletion is blocked", async () => {
   const data = await createData();
   const teacherAClient = await loginAs("teacher.a@example.test");
-  const response = await teacherAClient.delete(`/api/batches/${data.batchA._id}`);
+  assert.equal((await teacherAClient.delete(`/api/batches/${data.batchA._id}`)).status, 409);
+
+  const response = await teacherAClient.patch(`/api/batches/${data.batchA._id}/archive`);
 
   assert.equal(response.status, 200);
   const storedBatch = await Batch.findById(data.batchA._id);
   assert.equal(storedBatch.active, false);
   assert.ok(storedBatch.archivedAt);
   assert.ok(await Enrollment.exists({ student: data.studentA._id, batch: data.batchA._id }));
+});
+
+test("deactivation, archive, and permanent user deletion are distinct", async () => {
+  const admin = await createUser("admin@example.test", ROLES.ADMIN);
+  const target = await createUser("target@example.test", ROLES.STUDENT);
+  const client = await loginAs(admin.email);
+
+  const deactivated = await client.patch(`/api/users/${target._id}`, {
+    active: false,
+  });
+  assert.equal(deactivated.status, 200);
+  assert.equal(deactivated.data.active, false);
+  assert.equal(deactivated.data.archivedAt, null);
+
+  const archived = await client.patch(`/api/users/${target._id}/archive`);
+  assert.equal(archived.status, 200);
+  const storedUser = await User.findById(target._id);
+  assert.equal(storedUser.active, false);
+  assert.ok(storedUser.archivedAt);
+
+  const restored = await client.patch(`/api/users/${target._id}`, {
+    active: true,
+  });
+  assert.equal(restored.status, 200);
+  assert.equal(restored.data.active, true);
+  assert.equal(restored.data.archivedAt, null);
+
+  const deleted = await client.delete(`/api/users/${target._id}`);
+  assert.equal(deleted.status, 200);
+  assert.equal(await User.findById(target._id), null);
+});
+
+test("permanent user deletion is blocked when historical records are linked", async () => {
+  const admin = await createUser("history.admin@example.test", ROLES.ADMIN);
+  const teacher = await createUser("history.teacher@example.test", ROLES.TEACHER);
+  const student = await createUser("history.student@example.test", ROLES.STUDENT);
+  const batch = await createBatch("History batch", teacher._id);
+  await Enrollment.create({ student: student._id, batch: batch._id });
+  const client = await loginAs(admin.email);
+
+  const response = await client.delete(`/api/users/${student._id}`);
+  assert.equal(response.status, 409);
+  assert.ok(await User.findById(student._id));
+});
+
+test("permanent deletion removes an unused batch but protects batches with history", async () => {
+  const admin = await createUser("batch.admin@example.test", ROLES.ADMIN);
+  const teacher = await createUser("batch.teacher@example.test", ROLES.TEACHER);
+  const unused = await createBatch("Unused batch", teacher._id);
+  const client = await loginAs(admin.email);
+
+  const response = await client.delete(`/api/batches/${unused._id}`);
+  assert.equal(response.status, 200);
+  assert.equal(await Batch.findById(unused._id), null);
+});
+
+test("admins can delete unused custom roles but cannot delete core or assigned roles", async () => {
+  const admin = await createUser("role.admin@example.test", ROLES.ADMIN);
+  const client = await loginAs(admin.email);
+  assert.equal((await client.get("/api/roles")).status, 200);
+
+  const coreRole = await Role.findOne({ name: ROLES.ADMIN });
+  const coreDelete = await client.delete(`/api/roles/${coreRole._id}`);
+  assert.equal(coreDelete.status, 400);
+
+  const customRole = await Role.create({
+    name: "temporary",
+    label: "Temporary",
+    permissions: [],
+  });
+  const deleted = await client.delete(`/api/roles/${customRole._id}`);
+  assert.equal(deleted.status, 200);
+  assert.equal(await Role.findById(customRole._id), null);
+
+  const assignedRole = await Role.create({
+    name: "assigned",
+    label: "Assigned",
+    permissions: [],
+  });
+  const assignedUser = await createUser("role.assigned@example.test", ROLES.STUDENT);
+  await User.collection.updateOne({ _id: assignedUser._id }, { $set: { role: assignedRole.name } });
+  const blocked = await client.delete(`/api/roles/${assignedRole._id}`);
+  assert.equal(blocked.status, 409);
+  assert.ok(await Role.findById(assignedRole._id));
 });

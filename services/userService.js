@@ -3,6 +3,10 @@
 
 const User = require("../models/User");
 const Enrollment = require("../models/Enrollment");
+const Attendance = require("../models/Attendance");
+const Submission = require("../models/Submission");
+const Assignment = require("../models/Assignment");
+const Batch = require("../models/Batch");
 const { ROLES, NAME_MAX_LENGTH } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { normalizePermissions } = require("../config/permissions");
@@ -109,7 +113,7 @@ async function updateUser({ requester, userId, payload }) {
 
     shouldRevokeSessions = shouldRevokeSessions || nextActive !== user.active;
     user.active = nextActive;
-    user.archivedAt = nextActive ? null : new Date();
+    if (nextActive) user.archivedAt = null;
   }
 
   if (fields.permissions !== undefined) {
@@ -157,11 +161,11 @@ async function resetPassword(requester, targetUserId) {
   return temporaryPassword;
 }
 
-async function deleteUser({ requester, userId }) {
+async function archiveUser({ requester, userId }) {
   assertObjectId(userId, "user id");
 
   if (String(userId) === String(getUserId(requester))) {
-    throw new AppError("You cannot delete your own account.", 400);
+    throw new AppError("You cannot archive your own account.", 400);
   }
 
   const user = await User.findById(userId);
@@ -178,4 +182,39 @@ async function deleteUser({ requester, userId }) {
   return { message: "User archived successfully." };
 }
 
-module.exports = { listUsers, updateUser, resetPassword, deleteUser };
+async function deleteUser({ requester, userId }) {
+  assertObjectId(userId, "user id");
+
+  if (String(userId) === String(getUserId(requester))) {
+    throw new AppError("You cannot delete your own account.", 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) throw new AppError("User not found.", 404);
+
+  const references = await Promise.all([
+    Enrollment.exists({ student: user._id }),
+    Attendance.exists({ $or: [{ student: user._id }, { enteredBy: user._id }] }),
+    Submission.exists({ $or: [{ student: user._id }, { gradedBy: user._id }] }),
+    Assignment.exists({ createdBy: user._id }),
+    Batch.exists({ teacher: user._id }),
+  ]);
+  if (references.some(Boolean)) {
+    throw new AppError(
+      "This user has linked history or records. Archive the account instead.",
+      409,
+    );
+  }
+
+  await sessionService.revokeAllForUser(user._id);
+  await user.deleteOne();
+  return { message: "User deleted permanently." };
+}
+
+module.exports = {
+  listUsers,
+  updateUser,
+  resetPassword,
+  archiveUser,
+  deleteUser,
+};

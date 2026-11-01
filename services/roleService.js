@@ -2,6 +2,7 @@
 // The three core roles are created on first use, so a fresh database is usable.
 
 const Role = require("../models/Role");
+const User = require("../models/User");
 const { ROLES, ROLE_NAME_MAX_LENGTH } = require("../constants");
 const { PERMISSIONS, ROLE_DEFAULTS } = require("../config/permissions");
 const { AppError } = require("../utils/errors");
@@ -88,4 +89,28 @@ async function updateRole({ roleId, payload }) {
   return role;
 }
 
-module.exports = { ensureCoreRoles, listRoles, createRole, updateRole };
+async function deleteRole({ roleId }) {
+  assertObjectId(roleId, "role id");
+  const role = await Role.findById(roleId);
+
+  if (!role) {
+    throw new AppError("Role not found.", 404);
+  }
+  if (CORE_ROLES.some((coreRole) => coreRole.name === role.name)) {
+    throw new AppError("Core roles cannot be deleted.", 400);
+  }
+  if (await User.exists({ role: role.name })) {
+    throw new AppError("Reassign users before deleting this role.", 409);
+  }
+
+  await role.deleteOne();
+  return { message: "Role deleted successfully." };
+}
+
+module.exports = {
+  ensureCoreRoles,
+  listRoles,
+  createRole,
+  updateRole,
+  deleteRole,
+};

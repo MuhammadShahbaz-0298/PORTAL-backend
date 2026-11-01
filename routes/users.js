@@ -7,6 +7,7 @@ const {
   listUsers,
   updateUser,
   resetPassword,
+  archiveUser,
   deleteUser,
 } = require("../controllers/userController");
 
@@ -15,6 +16,7 @@ const router = express.Router();
 router.use(auth);
 router.get("/", requirePermission("students.view"), listUsers);
 router.patch("/:id", requirePermission("users.manage"), updateUser);
+router.patch("/:id/archive", requirePermission("users.manage"), archiveUser);
 router.patch("/:id/reset-password", requirePermission("users.manage"), resetPassword);
 router.delete("/:id", requirePermission("users.manage"), deleteUser);
 

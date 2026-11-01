@@ -1,4 +1,4 @@
-// HTTP layer for the user list, user updates, password resets and soft delete.
+// HTTP layer for users and account lifecycle actions.
 
 const userService = require("../services/userService");
 const asyncHandler = require("../utils/asyncHandler");
@@ -24,6 +24,14 @@ const resetPassword = asyncHandler(async (request, response) => {
   return response.json({ temporaryPassword });
 });
 
+const archiveUser = asyncHandler(async (request, response) => {
+  const result = await userService.archiveUser({
+    requester: request.user,
+    userId: request.params.id,
+  });
+  return response.json(result);
+});
+
 const deleteUser = asyncHandler(async (request, response) => {
   const result = await userService.deleteUser({
     requester: request.user,
@@ -33,4 +41,4 @@ const deleteUser = asyncHandler(async (request, response) => {
   return response.json(result);
 });
 
-module.exports = { listUsers, updateUser, resetPassword, deleteUser };
+module.exports = { listUsers, updateUser, resetPassword, archiveUser, deleteUser };
