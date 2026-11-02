@@ -19,6 +19,22 @@ function saveLoginCookies(response, tokens) {
   setAuthCookies(response, tokens, readAuthSettings(), readCookieSettings());
 }
 
+function isMobileClient(request) {
+  return request.get("x-client") === "mobile";
+}
+
+// Web stays cookie-only; the mobile app cannot read httpOnly cookies.
+function buildSessionResponse(request, result) {
+  const body = { user: result.user };
+
+  if (isMobileClient(request)) {
+    body.accessToken = result.accessToken;
+    body.refreshToken = result.refreshToken;
+  }
+
+  return body;
+}
+
 const register = asyncHandler(async (request, response) => {
   let batchId;
 
@@ -64,7 +80,7 @@ const login = asyncHandler(async (request, response) => {
   });
 
   saveLoginCookies(response, result);
-  return response.json({ user: result.user });
+  return response.json(buildSessionResponse(request, result));
 });
 
 const refresh = asyncHandler(async (request, response) => {
@@ -73,7 +89,7 @@ const refresh = asyncHandler(async (request, response) => {
   try {
     const result = await authService.refreshSession({ refreshToken, request });
     saveLoginCookies(response, result);
-    return response.json({ user: result.user });
+    return response.json(buildSessionResponse(request, result));
   } catch (error) {
     clearAuthCookies(response, readCookieSettings());
     throw error;

@@ -236,6 +236,76 @@ Frontend changes:
    user to the change-password screen.
 3. After a successful password change, resume normal navigation.
 
+## 18. Mobile clients (additive)
+
+Native apps cannot read the `httpOnly` cookies, so they opt in to the body
+token contract with this request header:
+
+```
+x-client: mobile
+```
+
+### Login
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+x-csrf-protection: 1
+x-client: mobile
+
+{ "email": "user@example.test", "password": "..." }
+```
+
+`200`
+
+```json
+{
+  "user": { "id": "...", "name": "...", "email": "...", "role": "student", "active": true, "permissions": [] },
+  "accessToken": "...",
+  "refreshToken": "..."
+}
+```
+
+Cookies are still set for compatibility. Without `x-client: mobile`, the
+response remains `{ "user": { ... } }` and no tokens are returned.
+
+### Refresh
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+x-csrf-protection: 1
+x-client: mobile
+
+{ "refreshToken": "..." }
+```
+
+`200` returns a rotated `accessToken` and `refreshToken` plus the user. The
+cookie is still preferred when both are present.
+
+### Logout
+
+```http
+POST /api/auth/logout
+Content-Type: application/json
+x-csrf-protection: 1
+x-client: mobile
+
+{ "refreshToken": "..." }
+```
+
+The body token is used only when the `portal_refresh` cookie is missing. The
+session is revoked and the mobile app must delete both stored tokens.
+
+### Security rules
+
+- Mobile tokens are returned only to clients that send `x-client: mobile`.
+- Never log request bodies or tokens.
+- Store tokens with the platform secure store, never AsyncStorage.
+- On `401`, refresh once, retry once, then clear tokens and show login.
+- On `403` with `"You must change your password before continuing."`, stop and
+  show the change-password screen.
+
 ## Frontend checklist
 
 - [ ] `credentials: "include"` on every API call.

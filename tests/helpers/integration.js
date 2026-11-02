@@ -46,8 +46,8 @@ class TestClient {
   }
 
   async request(method, requestPath, options = {}) {
-    const { body, csrf = true } = options;
-    const headers = {};
+    const { body, csrf = true, headers: extraHeaders = {} } = options;
+    const headers = { ...extraHeaders };
 
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";

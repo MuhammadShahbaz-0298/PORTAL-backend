@@ -43,7 +43,15 @@ function getAccessToken(request) {
 
 function getRefreshToken(request) {
   const cookies = parseCookies(request);
-  return cookies[AUTH_COOKIES.REFRESH_NAME] || "";
+  const cookieToken = cookies[AUTH_COOKIES.REFRESH_NAME];
+
+  // Native clients cannot read httpOnly cookies, so they may send the token in the body.
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  const bodyToken = request.body?.refreshToken;
+  return typeof bodyToken === "string" ? bodyToken.trim() : "";
 }
 
 function buildCookieOptions(cookieSettings, path, maxAgeMilliseconds) {
