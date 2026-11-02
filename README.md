@@ -1,26 +1,33 @@
-# School Portal — Backend
+# School Portal: Backend
 
 REST API for a small school portal: users and roles, batches, assignments,
 ZIP submissions, grading and attendance.
 
-The API is designed for a frontend hosted on a **different address** (for
-example `portal.up.railway.app` calling `portal-api.up.railway.app`), so
-authentication uses cross-site `httpOnly` cookies instead of tokens stored in
-JavaScript.
+The frontend is separate, so authentication uses `httpOnly` cookies instead of
+tokens kept in JavaScript.
 
-## What this service does
+## What it does
 
-- Logs users in with a short-lived JWT access token plus a rotating refresh token.
-- Keeps sessions in MongoDB, so logout, idle timeout and "disable user" take effect immediately.
-- Enforces permissions and ownership on every request (admin / teacher / student).
-- Stores uploaded ZIP files outside the public folder and serves them only through an authorized download route.
+- Logs users in with a short-lived access token plus a rotating refresh token.
+- Keeps sessions in MongoDB, so logout, idle timeout and "disable user" take
+  effect immediately.
+- Checks permissions and ownership on every request (admin, teacher, student).
+- Stores uploaded ZIP files outside any public folder and serves them only
+  through an authorized download route.
 - Archives users, batches and assignments instead of deleting history.
-- Ships tests for every security control in `tests/`.
+- Lets an admin reset a user's password. The user must choose a new one at the
+  next sign-in.
+- Ships tests for the security controls in `tests/`.
+
+## Tech stack
+
+Node.js, Express 4, MongoDB with Mongoose 8, JWT, bcryptjs, multer, helmet,
+ESLint and Prettier. Tests use `node --test` and an in-memory MongoDB.
 
 ## Requirements
 
-- Node.js 20 or newer.
-- MongoDB 6 or newer (local, Docker, or MongoDB Atlas).
+- Node.js 20 or newer
+- MongoDB 6 or newer (local or Docker)
 
 ## Quick start
 
@@ -28,86 +35,142 @@ JavaScript.
 npm install
 copy .env.example .env      # Windows
 # cp .env.example .env      # macOS / Linux
+```
 
-# Generate a real secret and paste it into JWT_SECRET:
+Generate a real secret and paste it into `JWT_SECRET` in `.env`:
+
+```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
 
+Start the API:
+
+```bash
 npm run dev
 ```
 
-The server refuses to start while required environment values are missing or
-unsafe. That is intentional. See `docs/SECURITY.md` for the full list.
-
-Open `http://localhost:5000/health`:
+Check that it is alive at `http://localhost:5000/health`:
 
 ```json
 { "success": true, "data": { "status": "ok" } }
 ```
 
-Create the first admin (values come from environment variables, never argv):
+The server refuses to start while a required value is missing or unsafe. That
+is on purpose. See `docs/SECURITY.md`.
+
+## Create the first admin
+
+Put `ADMIN_NAME`, `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`, then run:
 
 ```bash
-# add ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD to .env first
 npm run seed:admin
 ```
+
+The password is read from the environment, never from the command line. Remove
+`ADMIN_PASSWORD` from `.env` afterwards.
+
+To create clearly fake demo accounts for local work, set `SEED_DEMO_PASSWORD`
+and run `node scripts/seedDemo.js --apply`.
 
 ## Environment variables
 
 | Name                                            | Required      | Default       | Notes                                                       |
 | ----------------------------------------------- | ------------- | ------------- | ----------------------------------------------------------- |
-| `PORT`                                          | no            | `5000`        | Railway sets this for you.                                  |
-| `NODE_ENV`                                      | no            | `development` | Use `production` on Railway.                                |
-| `MONGO_URI`                                     | yes           | —             | Must start with `mongodb://` or `mongodb+srv://`.           |
-| `JWT_SECRET`                                    | yes           | —             | At least 64 characters, random, not an example value.       |
-| `FRONTEND_URL`                                  | yes           | —             | Exact origin allowed by CORS. No trailing slash.            |
-| `ACCESS_TOKEN_MINUTES`                          | no            | `10`          | Must not exceed the idle timeout.                           |
-| `REFRESH_TOKEN_DAYS`                            | no            | `7`           | Sliding refresh lifetime.                                   |
+| `PORT`                                          | no            | `5000`        | API port.                                                   |
+| `NODE_ENV`                                      | no            | `development` | Runtime environment.                                        |
+| `MONGO_URI`                                     | yes           |               | Must start with `mongodb://` or `mongodb+srv://`.           |
+| `JWT_SECRET`                                    | yes           |               | At least 64 random characters, not an example value.        |
+| `FRONTEND_URL`                                  | yes           |               | Exact frontend origin allowed by CORS. No trailing slash.   |
+| `ACCESS_TOKEN_MINUTES`                          | no            | `10`          | Must not be longer than the idle timeout.                   |
+| `REFRESH_TOKEN_DAYS`                            | no            | `7`           | Refresh token life.                                         |
 | `IDLE_TIMEOUT_MINUTES`                          | no            | `10`          | No request for this long logs the user out.                 |
-| `SESSION_MAX_HOURS`                             | no            | `24`          | Hard cap for one login family.                              |
-| `COOKIE_DOMAIN`                                 | no            | empty         | Set only for a shared parent domain such as `.example.com`. |
-| `UPLOAD_DIR`                                    | no            | `./uploads`   | Must be writable and persistent in production.              |
-| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | for seeding   | —             | Used only by `npm run seed:admin`.                          |
-| `SEED_DEMO_PASSWORD`                            | for demo seed | —             | Used only by `npm run db:seed-demo`.                        |
+| `SESSION_MAX_HOURS`                             | no            | `24`          | Hard cap for one login.                                     |
+| `COOKIE_DOMAIN`                                 | no            | empty         | Only for a shared parent domain such as `.example.com`.     |
+| `UPLOAD_DIR`                                    | no            | `./uploads`   | Must be writable. See the storage note below.               |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | for seeding   |               | Used only by `npm run seed:admin`.                          |
+| `SEED_DEMO_PASSWORD`                            | for demo seed |               | Used only by `scripts/seedDemo.js`.                         |
 
-Never commit `.env`. `.gitignore` already excludes it and everything matching
-`.env.*` except `.env.example`.
+Never commit `.env`. `.gitignore` already excludes it.
 
 ## Scripts
 
-| Command                                  | What it does                                                                      |
-| ---------------------------------------- | --------------------------------------------------------------------------------- |
-| `npm start`                              | Start the API.                                                                    |
-| `npm run dev`                            | Start with nodemon.                                                               |
-| `npm test`                               | Run all tests with `node --test` against an in-memory MongoDB.                    |
-| `npm run lint`                           | ESLint (fails on unused variables, `==`, `var`).                                  |
-| `npm run format`                         | Prettier.                                                                         |
-| `npm run seed:admin`                     | Create the first admin from env vars.                                             |
-| `npm run db:migrate-teacher-permissions` | Add the new teacher permissions to the existing teacher role. Dry run by default. |
-| `npm run db:clean`                       | Normalize data and report duplicates/orphans. Dry run by default, never deletes.  |
-| `npm run db:seed-demo`                   | Create fake demo accounts (requires `--apply`).                                   |
+| Command                                  | What it does                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `npm start`                              | Start the API.                                                                  |
+| `npm run dev`                            | Start with nodemon.                                                             |
+| `npm test`                               | Run all tests against an in-memory MongoDB.                                     |
+| `npm run lint` / `npm run lint:fix`      | Check, or fix, code problems with ESLint.                                       |
+| `npm run format` / `npm run format:check`| Format, or check formatting, with Prettier.                                     |
+| `npm run seed:admin`                     | Create the first admin from environment variables.                              |
+| `npm run db:migrate-teacher-permissions` | Add newer teacher permissions to the existing teacher role. Dry run by default. |
+| `npm run db:clean`                       | Normalize data and report duplicates and orphans. Dry run by default.           |
 
-Write scripts refuse to run without `--apply --i-have-a-backup`. See
-`docs/DATABASE.md` before touching real data.
+Scripts that write data refuse to run without `--apply --i-have-a-backup`. Take
+a `mongodump` backup first and read `docs/DATABASE.md`.
+
+## Roles and default permissions
+
+| Role    | Can do                                                                                              |
+| ------- | --------------------------------------------------------------------------------------------------- |
+| Admin   | Everything: users, roles, batches, assignments, grading, attendance                                 |
+| Teacher | Their own batches: students, assignments, grading, attendance                                       |
+| Student | View their assignments, upload and replace their own ZIP, see their own grades and attendance       |
+
+Admins can create custom roles and grant extra permissions to a single user.
+The full permission list is in `config/permissions.js`. Permissions and
+ownership are checked on the server for every request, whatever the frontend
+shows.
+
+## API overview
+
+All routes are under `/api`. Full details are in `docs/API.md`.
+
+| Area        | Routes                                                                                           |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| Auth        | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/change-password`, `/auth/register`; `GET /auth/me` |
+| Users       | `GET /users`, `PATCH /users/:id`, `PATCH /users/:id/reset-password`, `DELETE /users/:id`          |
+| Batches     | `GET/POST /batches`, `PATCH/DELETE /batches/:id`, `POST /batches/:id/enroll`, `GET /batches/:id/students` |
+| Assignments | `GET/POST /assignments`, `GET/PATCH/DELETE /assignments/:id`                                      |
+| Submissions | `GET /submissions`, `POST /submissions`, `PATCH /submissions/:id/file`, `PATCH /submissions/:id/grade`, `GET /submissions/:id/download` |
+| Attendance  | `GET/POST /attendance`, `GET /attendance/:studentId`, `PATCH /attendance/:id`                     |
+| Roles       | `GET/POST /roles`, `PATCH /roles/:id`, `GET /permissions`, `PATCH /permissions/users/:id`         |
+| Health      | `GET /health`                                                                                     |
+
+Lists return a plain array. Paging details come in the `X-Page`, `X-Page-Limit`
+and `X-Total-Count` headers. Errors use one shape:
+`{ "success": false, "error": "message" }`.
+
+## Using the API (from a frontend or Postman)
+
+1. Send cookies: `credentials: "include"` in `fetch`, or `withCredentials: true`
+   in Axios.
+2. Add the header `x-csrf-protection: 1` to every `POST`, `PUT`, `PATCH` and
+   `DELETE`. Without it the API answers `Missing CSRF protection header.`
+3. Never store tokens in `localStorage`. They are `httpOnly` cookies.
+4. On a `401`, call `POST /api/auth/refresh` once, then retry the request.
+
+In Postman, put the CSRF header on the collection and keep requests inside a
+collection so the cookie jar is used.
 
 ## Folder structure
 
 ```
-app.js                 Express wiring, CORS, helmet, CSRF, error handler
-server.js              Env check, database connect, listen, graceful shutdown
-config/                env validation, auth settings, permission catalog, db connection
-constants/             roles, statuses, limits, sizes, cookie names
-models/                Mongoose schemas and indexes
-routes/<feature>.js    URL -> controller mapping only
-controllers/           HTTP layer, under 150 lines each
-services/              Business rules and database access
-middleware/            auth, permissions, CSRF, body validation, uploads
-utils/                 validation, pagination, search, cookies, ZIP checks, errors
-scripts/               safe data scripts (dry run by default)
-tests/                 security and behavior tests
-docs/                  API, architecture, database, security, change log
+app.js               Express setup: helmet, CORS, CSRF, routes, error handler
+server.js            Env check, database connect, listen, graceful shutdown
+config/              Env validation, auth settings, permission catalog, database
+constants/           Roles, statuses, limits, sizes, cookie names
+models/              Mongoose schemas and indexes
+routes/              URL to controller mapping only
+controllers/         HTTP layer
+services/            Business rules and database access
+middleware/          Auth, permissions, ownership, CSRF, body checks, uploads
+utils/               Validation, pagination, search, cookies, ZIP checks, errors
+scripts/             Data scripts (dry run by default)
+tests/               Security and behaviour tests
+docs/                API, architecture, database, security, change log
 ```
 
-The rule is always:
+Every feature follows one shape:
 
 ```
 routes/<feature>.js -> controllers/<feature>Controller.js
@@ -115,54 +178,30 @@ routes/<feature>.js -> controllers/<feature>Controller.js
                     -> models/<Feature>.js
 ```
 
-`docs/ADD_A_FEATURE.md` walks through adding a feature in that shape.
+`docs/ADD_A_FEATURE.md` explains how to add one by copying an existing feature.
 
-## API and docs
+## Documentation
 
-- Endpoint reference: `docs/API.md`
-- Breaking changes for the frontend: `docs/API_CHANGES.md`
-- Architecture and request flow: `docs/ARCHITECTURE.md`
-- Security controls and limits: `docs/SECURITY.md`
-- Collections, indexes and data scripts: `docs/DATABASE.md`
-- Coding rules: `docs/CODING_RULES.md`
+| File                    | What is in it                                  |
+| ----------------------- | ---------------------------------------------- |
+| `docs/API.md`           | Every endpoint, who can call it, examples      |
+| `docs/API_CHANGES.md`   | Contract changes the frontend must follow      |
+| `docs/ARCHITECTURE.md`  | Request flow, auth and permission design       |
+| `docs/SECURITY.md`      | Security controls and practices                |
+| `docs/DATABASE.md`      | Collections, fields, indexes, data scripts     |
+| `docs/ADD_A_FEATURE.md` | Copy-and-rename recipe for a new feature       |
+| `docs/CODING_RULES.md`  | Naming, comments and file rules                |
 
-## Frontend integration (different origins)
+## Troubleshooting
 
-The frontend must send cookies:
-
-```js
-await fetch(`${API_URL}/api/auth/login`, {
-  method: "POST",
-  credentials: "include",
-  headers: {
-    "Content-Type": "application/json",
-    "x-csrf-protection": "1",
-  },
-  body: JSON.stringify({ email, password }),
-});
-```
-
-Rules:
-
-1. `credentials: "include"` on every request.
-2. `x-csrf-protection: 1` on every `POST`, `PUT`, `PATCH` and `DELETE`.
-3. Do not store tokens in `localStorage`. The tokens are `httpOnly` cookies.
-4. On `401`, call `POST /api/auth/refresh` once, then retry the original request.
-5. Read `X-Total-Count`, `X-Page` and `X-Page-Limit` from list responses.
-
-## Deployment notes (Railway)
-
-- Set `NODE_ENV=production` and `FRONTEND_URL` to the exact frontend origin.
-- Cookies become `SameSite=None; Secure` automatically in production. **Both
-  sites must be HTTPS**, or the browser will drop the cookies.
-- If the frontend and API are on unrelated domains (not subdomains of the same
-  site), some browsers block third-party cookies. Prefer putting both services
-  on the same parent domain (for example `app.example.com` and
-  `api.example.com`) and set `COOKIE_DOMAIN=.example.com`.
-- Railway containers have an ephemeral filesystem. Uploaded ZIP files disappear
-  on redeploy unless `UPLOAD_DIR` points at a mounted volume or you move uploads
-  to object storage before going live.
-- Take a `mongodump` backup before running any `--apply` data script.
+| Problem                                    | Likely cause and fix                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `Missing CSRF protection header.`          | Add `x-csrf-protection: 1` to the request.                                     |
+| Server exits at start                      | A required variable is missing or unsafe. The message names which one.         |
+| Login works but you are logged out at once | Cookies blocked across sites, or `FRONTEND_URL` is not an exact match.         |
+| `429` on login                             | Ten failed attempts in 15 minutes. Wait for the window to end.                 |
+| `403` "You must change your password..."   | An admin reset this account. Sign in and use change password.                  |
+| CORS error in the browser                  | `FRONTEND_URL` must equal the browser address exactly, with no trailing slash. |
 
 ## Tests
 
@@ -170,16 +209,10 @@ Rules:
 npm test
 ```
 
-The suite starts a throwaway MongoDB in memory, so it never touches your
-database, and covers:
+The suite starts a throwaway MongoDB in memory, so it never touches your real
+database. It covers login cookies, refresh rotation and reuse detection, idle
+timeout, disabled users, CSRF, login lockout, password changes and admin
+resets, environment checks, permissions and ownership across batches,
+attendance, grading and registration, ZIP safety checks, validation and
+pagination.
 
-- cookie-only login, refresh rotation, refresh-reuse detection
-- access token expiry, idle timeout, disabled-user rejection
-- logout revocation, login lockout, CSRF rejection, password-change revocation
-- environment validation and production cookie flags
-- teacher/student ownership across batches, attendance, grading and registration
-- multi-batch enrollment and soft-delete behavior
-- ZIP signature, ZIP bomb, unsafe archive paths and upload path traversal
-- validation, pagination, error mapping and permission normalization
-
-42 tests, no external services required.
