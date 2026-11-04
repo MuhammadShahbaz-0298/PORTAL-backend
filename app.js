@@ -25,7 +25,18 @@ app.disable("x-powered-by");
 // Railway sits in front of the app, so Express must trust one proxy hop.
 app.set("trust proxy", 1);
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        "default-src": ["'none'"],
+        "frame-ancestors": ["'none'"],
+      },
+    },
+  }),
+);
+
 app.use(
   cors({
     origin: process.env.FRONTEND_URL,
