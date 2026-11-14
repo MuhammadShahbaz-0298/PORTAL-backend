@@ -9,6 +9,7 @@ const { getUserId, getUserRole } = require("../utils/authorization");
 const {
   assertDate,
   assertEnum,
+  assertNumber,
   assertString,
   assertObjectId,
   assertOptionalString,
@@ -27,11 +28,27 @@ function addOneDay(date) {
 }
 
 async function addAttendance({ requester, payload }) {
-  const fields = pickFields(payload, ["studentId", "batchId", "date", "status", "leaveReason"]);
+  const fields = pickFields(payload, [
+    "studentId",
+    "batchId",
+    "date",
+    "status",
+    "leaveReason",
+    "timezoneOffset",
+  ]);
   const studentId = assertObjectId(fields.studentId, "student id");
   const batchId = assertObjectId(fields.batchId, "batch id");
   const date = startOfDay(fields.date);
-  if (date > startOfDay(new Date())) {
+  const timezoneOffset =
+    fields.timezoneOffset === undefined
+      ? 0
+      : assertNumber(fields.timezoneOffset, "timezoneOffset", {
+          min: -840,
+          max: 720,
+          integer: true,
+        });
+  const today = startOfDay(new Date(Date.now() - timezoneOffset * 60 * 1000));
+  if (date > today) {
     throw new AppError("Attendance cannot be marked for a future date.", 400);
   }
   const status = assertEnum(fields.status, ATTENDANCE_STATUSES, "status");
@@ -136,7 +153,15 @@ async function updateAttendance({ requester, attendanceId, payload }) {
   }
 
   await batchAccessService.assertCanManageBatch(requester, attendance.batch);
-  const fields = pickFields(payload, ["date", "status", "leaveReason"]);
+  const fields = pickFields(payload, ["date", "status", "leaveReason", "timezoneOffset"]);
+  const timezoneOffset =
+    fields.timezoneOffset === undefined
+      ? 0
+      : assertNumber(fields.timezoneOffset, "timezoneOffset", {
+          min: -840,
+          max: 720,
+          integer: true,
+        });
 
   if (fields.date !== undefined) {
     attendance.date = startOfDay(fields.date);
@@ -144,7 +169,7 @@ async function updateAttendance({ requester, attendanceId, payload }) {
 
   if (
     getUserRole(requester) === ROLES.TEACHER &&
-    attendance.date > startOfDay(new Date())
+    attendance.date > startOfDay(new Date(Date.now() - timezoneOffset * 60 * 1000))
   ) {
     throw new AppError("Attendance cannot be marked for a future date.", 400);
   }

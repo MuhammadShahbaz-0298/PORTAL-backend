@@ -494,12 +494,15 @@ Permission: `attendance.manage`. Admin, or the owning teacher.
   "studentId": "665f...",
   "batchId": "665f...",
   "date": "2026-10-30",
+  "timezoneOffset": -300,
   "status": "present"
 }
 ```
 
 `status` is one of `present`, `absent`, `leave`. The student must be enrolled in
-the batch. The date is normalized to UTC midnight.
+the batch. The date is normalized to UTC midnight. `timezoneOffset` is optional;
+send the value from the client's `Date.getTimezoneOffset()` so today's date is
+checked in the client's local timezone. If omitted, UTC is used.
 
 If `status` is `leave`, a `leaveReason` field is required and must be at most
 2000 characters.
@@ -511,7 +514,8 @@ record. Returns `200` with the attendance document (not `201`).
 
 Permission: `attendance.manage`. Admin, or the owning teacher.
 
-Accepts `date`, `status`, and/or `leaveReason`.
+Accepts `date`, `status`, `leaveReason`, and an optional `timezoneOffset` from
+the client's `Date.getTimezoneOffset()`.
 
 - If `status` is `leave`, `leaveReason` is required and must be at most 2000 characters.
 - If `status` is `present` or `absent`, the field is cleared; a non-empty provided `leaveReason` returns `400`.

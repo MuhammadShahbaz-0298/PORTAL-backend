@@ -317,6 +317,35 @@ test("attendance leave with reason saves", async () => {
   assert.equal(allowed.data.leaveReason, "Illness");
 });
 
+test("attendance accepts local today and still rejects local future dates", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const timezoneOffset = -300;
+  const localToday = new Date(Date.now() - timezoneOffset * 60 * 1000);
+  const today = localToday.toISOString().slice(0, 10);
+  const tomorrowDate = new Date(localToday);
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+  const body = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    status: "present",
+    timezoneOffset,
+  };
+
+  const todayResult = await teacherAClient.post("/api/attendance", {
+    ...body,
+    date: today,
+  });
+  assert.equal(todayResult.status, 200);
+
+  const tomorrowResult = await teacherAClient.post("/api/attendance", {
+    ...body,
+    date: tomorrow,
+  });
+  assert.equal(tomorrowResult.status, 400);
+});
+
 test("attendance leave without reason returns 400", async () => {
   const data = await createData();
   const teacherAClient = await loginAs("teacher.a@example.test");

@@ -341,3 +341,7 @@ session is revoked and the mobile app must delete both stored tokens.
 - A date-only PATCH to an older reasonless leave record remains allowed.
 
 This is **additive** — existing attendance records without `leaveReason` continue to work. The frontend must send `leaveReason` when marking a student on leave.
+
+Attendance requests may also include `timezoneOffset` (the value from the
+client's `Date.getTimezoneOffset()`) so the backend checks "today" in the
+client's local timezone. If omitted, UTC is used.
