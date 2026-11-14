@@ -331,3 +331,13 @@ session is revoked and the mobile app must delete both stored tokens.
 - Added the standalone forced password change page and its public `/force-change-password` route in `src/features/auth/ForceChangePasswordPage.jsx` and `src/routes/index.jsx`.
 - Added the `resetPassword` API call in `src/api/users.js`.
 - Added the admin reset-password action button, confirmation, and one-time credential warning in `src/features/users/UsersPage.jsx`.
+
+## 19. Leave reason validation (additive)
+
+`POST /api/attendance` and `PATCH /api/attendance/:id` now validate `leaveReason`:
+
+- `status` is `leave` → a reason is required when creating the record or explicitly setting its status; empty/whitespace returns `400 { error: "leave reason is required." }`.
+- `status` is `present` or `absent` → any non-empty `leaveReason` returns `400 { error: "leave reason is only allowed when status is leave." }`.
+- A date-only PATCH to an older reasonless leave record remains allowed.
+
+This is **additive** — existing attendance records without `leaveReason` continue to work. The frontend must send `leaveReason` when marking a student on leave.

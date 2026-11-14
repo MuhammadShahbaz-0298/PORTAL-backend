@@ -8,6 +8,7 @@ const Batch = require("../models/Batch");
 const Enrollment = require("../models/Enrollment");
 const Assignment = require("../models/Assignment");
 const Submission = require("../models/Submission");
+const Attendance = require("../models/Attendance");
 const Role = require("../models/Role");
 const { ROLES } = require("../constants");
 const { resetLoginRateLimits } = require("../utils/rateLimit");
@@ -298,4 +299,197 @@ test("admins can delete unused custom roles but cannot delete core or assigned r
   const blocked = await client.delete(`/api/roles/${assignedRole._id}`);
   assert.equal(blocked.status, 409);
   assert.ok(await Role.findById(assignedRole._id));
+});
+
+test("attendance leave with reason saves", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+    leaveReason: "Illness",
+  };
+
+  const allowed = await teacherAClient.post("/api/attendance", attendanceBody);
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.data.leaveReason, "Illness");
+});
+
+test("attendance leave without reason returns 400", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+  };
+
+  const result = await teacherAClient.post("/api/attendance", attendanceBody);
+  assert.equal(result.status, 400);
+});
+
+test("attendance reason with present status returns 400", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "present",
+    leaveReason: "Some reason",
+  };
+
+  const result = await teacherAClient.post("/api/attendance", attendanceBody);
+  assert.equal(result.status, 400);
+});
+
+test("student sees own leaveReason in attendance records", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const studentAClient = await loginAs("student.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+    leaveReason: "Appointment",
+  };
+
+  await teacherAClient.post("/api/attendance", attendanceBody);
+  const result = await studentAClient.get(`/api/attendance/${data.studentA._id}`);
+  assert.equal(result.status, 200);
+  const leaveRecord = result.data.records.find(r => r.status === "leave");
+  assert.ok(leaveRecord);
+  assert.equal(leaveRecord.leaveReason, "Appointment");
+});
+
+test("other batch's teacher cannot manage attendance", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchB._id),
+    date: "2026-10-30",
+    status: "present",
+  };
+
+  const result = await teacherAClient.post("/api/attendance", attendanceBody);
+  assert.equal(result.status, 403);
+});
+
+test("leave -> present clears the reason (POST)", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+    leaveReason: "Illness",
+  };
+  await teacherAClient.post("/api/attendance", attendanceBody);
+  const result = await teacherAClient.post("/api/attendance", {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "present",
+  });
+  assert.equal(result.status, 200);
+  assert.ok(!result.data.leaveReason || result.data.leaveReason === "");
+});
+
+test("PATCH present -> leave with reason works", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  // First POST a present record
+  const postResult = await teacherAClient.post("/api/attendance", {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "present",
+  });
+  const attendanceId = postResult.data._id;
+  // Then PATCH it to leave with reason
+  const result = await teacherAClient.patch(`/api/attendance/${attendanceId}`, {
+    status: "leave",
+    leaveReason: "Appointment",
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.data.leaveReason, "Appointment");
+});
+
+test("PATCH leave -> absent clears the reason", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const created = await teacherAClient.post("/api/attendance", {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+    leaveReason: "Illness",
+  });
+
+  const result = await teacherAClient.patch(`/api/attendance/${created.data._id}`, {
+    status: "absent",
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.status, "absent");
+  assert.equal(result.data.leaveReason, undefined);
+});
+
+test("PATCHing an old reasonless leave record's date works", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const record = await Attendance.create({
+    student: data.studentA._id,
+    batch: data.batchA._id,
+    batchName: data.batchA.name,
+    date: new Date("2026-10-30T00:00:00.000Z"),
+    status: "leave",
+    enteredBy: data.teacherA._id,
+  });
+
+  const result = await teacherAClient.patch(`/api/attendance/${record._id}`, {
+    date: "2026-10-31",
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.data.status, "leave");
+  assert.equal(result.data.leaveReason, undefined);
+  assert.equal(result.data.date, "2026-10-31T00:00:00.000Z");
+});
+
+test("PATCHing status to leave without a reason returns 400", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const present = await teacherAClient.post("/api/attendance", {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "present",
+  });
+
+  const result = await teacherAClient.patch(`/api/attendance/${present.data._id}`, {
+    status: "leave",
+  });
+
+  assert.equal(result.status, 400);
+});
+
+test("whitespace-only reason -> 400", async () => {
+  const data = await createData();
+  const teacherAClient = await loginAs("teacher.a@example.test");
+  const attendanceBody = {
+    studentId: String(data.studentA._id),
+    batchId: String(data.batchA._id),
+    date: "2026-10-30",
+    status: "leave",
+  };
+  attendanceBody.leaveReason = "   ";
+  const result = await teacherAClient.post("/api/attendance", attendanceBody);
+  assert.equal(result.status, 400);
 });

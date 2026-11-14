@@ -95,6 +95,7 @@ Indexes:
 | `student`   | ObjectId → users   | Required.                                          |
 | `batch`     | ObjectId → batches | Required.                                          |
 | `batchName` | String             | Snapshot so archived batches still display a name. |
+| `leaveReason` | String            | Reason for leave; max 2000 chars, optional (old records have no reason). |
 | `date`      | Date               | UTC midnight of the attendance day.                |
 | `status`    | String             | `present`, `absent`, `leave`.                      |
 | `enteredBy` | ObjectId → users   | Required.                                          |

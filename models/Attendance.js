@@ -2,7 +2,7 @@
 // The unique index stops the same day being saved twice.
 
 const mongoose = require("mongoose");
-const { ATTENDANCE_STATUSES, BATCH_NAME_MAX_LENGTH } = require("../constants");
+const { ATTENDANCE_STATUSES, FEEDBACK_MAX_LENGTH, BATCH_NAME_MAX_LENGTH } = require("../constants");
 
 const attendanceSchema = new mongoose.Schema(
   {
@@ -20,6 +20,7 @@ const attendanceSchema = new mongoose.Schema(
     },
     // Kept so old records still show a batch name if the batch is archived.
     batchName: { type: String, trim: true, maxlength: BATCH_NAME_MAX_LENGTH },
+    leaveReason: { type: String, trim: true, maxlength: FEEDBACK_MAX_LENGTH },
     date: { type: Date, required: true },
     status: {
       type: String,

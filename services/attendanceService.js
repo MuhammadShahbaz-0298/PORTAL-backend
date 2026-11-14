@@ -3,12 +3,13 @@
 
 const Attendance = require("../models/Attendance");
 const Batch = require("../models/Batch");
-const { ATTENDANCE_STATUSES, ROLES } = require("../constants");
+const { ATTENDANCE_STATUSES, FEEDBACK_MAX_LENGTH, ROLES } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId, getUserRole } = require("../utils/authorization");
 const {
   assertDate,
   assertEnum,
+  assertString,
   assertObjectId,
   assertOptionalString,
   pickFields,
@@ -26,13 +27,13 @@ function addOneDay(date) {
 }
 
 async function addAttendance({ requester, payload }) {
-  const fields = pickFields(payload, ["studentId", "batchId", "date", "status"]);
+  const fields = pickFields(payload, ["studentId", "batchId", "date", "status", "leaveReason"]);
   const studentId = assertObjectId(fields.studentId, "student id");
   const batchId = assertObjectId(fields.batchId, "batch id");
   const date = startOfDay(fields.date);
-    if (date > startOfDay(new Date())) {
-      throw new AppError("Attendance cannot be marked for a future date.", 400);
-    }
+  if (date > startOfDay(new Date())) {
+    throw new AppError("Attendance cannot be marked for a future date.", 400);
+  }
   const status = assertEnum(fields.status, ATTENDANCE_STATUSES, "status");
 
   await batchAccessService.assertCanManageBatch(requester, batchId);
@@ -43,16 +44,37 @@ async function addAttendance({ requester, payload }) {
     throw new AppError("Batch not found.", 404);
   }
 
+  const update = {
+    $set: {
+      status,
+      enteredBy: getUserId(requester),
+      batchName: batch.name,
+    },
+    $setOnInsert: { student: studentId, batch: batchId, date },
+  };
+
+  if (status === "leave") {
+    const leaveReason = assertString(fields.leaveReason, "leave reason", {
+      maxLength: FEEDBACK_MAX_LENGTH,
+    });
+    if (!leaveReason.trim()) {
+      throw new AppError("leave reason is required.", 400);
+    }
+    update.$set.leaveReason = leaveReason;
+  } else {
+    if (
+      fields.leaveReason !== undefined &&
+      fields.leaveReason !== null &&
+      String(fields.leaveReason).trim() !== ""
+    ) {
+      throw new AppError("leave reason is only allowed when status is leave.", 400);
+    }
+    update.$unset = { leaveReason: "" };
+  }
+
   return Attendance.findOneAndUpdate(
     { student: studentId, batch: batchId, date },
-    {
-      $set: {
-        status,
-        enteredBy: getUserId(requester),
-        batchName: batch.name,
-      },
-      $setOnInsert: { student: studentId, batch: batchId, date },
-    },
+    update,
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
   );
 }
@@ -114,7 +136,7 @@ async function updateAttendance({ requester, attendanceId, payload }) {
   }
 
   await batchAccessService.assertCanManageBatch(requester, attendance.batch);
-  const fields = pickFields(payload, ["date", "status"]);
+  const fields = pickFields(payload, ["date", "status", "leaveReason"]);
 
   if (fields.date !== undefined) {
     attendance.date = startOfDay(fields.date);
@@ -129,6 +151,27 @@ async function updateAttendance({ requester, attendanceId, payload }) {
 
   if (fields.status !== undefined) {
     attendance.status = assertEnum(fields.status, ATTENDANCE_STATUSES, "status");
+  }
+
+  if (fields.leaveReason !== undefined && attendance.status === "leave") {
+    const leaveReason = assertString(fields.leaveReason, "leave reason", {
+      maxLength: FEEDBACK_MAX_LENGTH,
+    });
+    if (!leaveReason.trim()) {
+      throw new AppError("leave reason is required.", 400);
+    }
+    attendance.leaveReason = leaveReason;
+  } else if (attendance.status === "leave" && fields.status !== undefined) {
+    throw new AppError("leave reason is required.", 400);
+  } else if (fields.leaveReason !== undefined) {
+    if (fields.leaveReason !== null && String(fields.leaveReason).trim() !== "") {
+      throw new AppError("leave reason is only allowed when status is leave.", 400);
+    }
+    attendance.leaveReason = undefined;
+  }
+
+  if (attendance.status !== "leave") {
+    attendance.leaveReason = undefined;
   }
 
   await attendance.save();

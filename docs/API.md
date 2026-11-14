@@ -501,6 +501,9 @@ Permission: `attendance.manage`. Admin, or the owning teacher.
 `status` is one of `present`, `absent`, `leave`. The student must be enrolled in
 the batch. The date is normalized to UTC midnight.
 
+If `status` is `leave`, a `leaveReason` field is required and must be at most
+2000 characters.
+
 Upsert semantics: posting the same student + batch + day updates the existing
 record. Returns `200` with the attendance document (not `201`).
 
@@ -508,7 +511,11 @@ record. Returns `200` with the attendance document (not `201`).
 
 Permission: `attendance.manage`. Admin, or the owning teacher.
 
-Accepts `date` and/or `status`.
+Accepts `date`, `status`, and/or `leaveReason`.
+
+- If `status` is `leave`, `leaveReason` is required and must be at most 2000 characters.
+- If `status` is `present` or `absent`, the field is cleared; a non-empty provided `leaveReason` returns `400`.
+- The `date` field may be changed independently; changing only the date on an old reasonless leave record is allowed.
 
 ---
 
