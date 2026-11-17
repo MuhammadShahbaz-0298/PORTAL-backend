@@ -7,8 +7,6 @@ const ROLES = Object.freeze({
   STUDENT: "student",
 });
 
-const ROLE_NAMES = Object.freeze(Object.values(ROLES));
-
 // Attendance can only be one of these three values.
 const ATTENDANCE_STATUSES = Object.freeze(["present", "absent", "leave"]);
 
@@ -88,7 +86,6 @@ const CSRF_HEADER_VALUE = "1";
 
 module.exports = {
   ROLES,
-  ROLE_NAMES,
   ATTENDANCE_STATUSES,
   SUBMISSION_STATUSES,
   RESUBMISSION_POLICIES,

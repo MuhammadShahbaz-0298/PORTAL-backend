@@ -99,18 +99,7 @@ async function createSubmission({ requester, assignmentId, file }) {
   }
 }
 
-async function updateSubmission({ requester, submissionId, file }) {
-  assertObjectId(submissionId, "submission id");
-  const submission = await Submission.findOne({
-    _id: submissionId,
-    student: getUserId(requester),
-  }).populate("assignment");
-
-  if (!submission) {
-    throw new AppError("Submission not found.", 404);
-  }
-
-  const assignment = submission.assignment;
+function assertCanReplace(submission, assignment) {
   if (!assignment.active || assignmentService.isExpired(assignment)) {
     throw new AppError("This assignment has expired.", 410);
   }
@@ -124,6 +113,44 @@ async function updateSubmission({ requester, submissionId, file }) {
   if (assignment.resubmissionPolicy === "disabled" && submission.status === "submitted") {
     throw new AppError("Resubmissions are disabled for this assignment.", 409);
   }
+}
+
+function applyReplacementFile(submission, file) {
+  submission.filePath = file.filename;
+  submission.fileName = sanitizeDisplayFileName(file.originalname);
+  submission.fileSize = file.size;
+  submission.mimeType = file.mimetype;
+  submission.status = "submitted";
+  submission.grade = null;
+  submission.feedback = null;
+  submission.gradedBy = null;
+  submission.gradedAt = null;
+  submission.submittedAt = new Date();
+  submission.aiDraft = undefined;
+}
+
+async function saveReplacementSnapshot(submission, file, generations) {
+  try {
+    // Copy the new ZIP text before the request ends, while the file still exists.
+    await aiDraftService.saveSnapshot(submission, file, { generations });
+  } catch {
+    console.error("AI snapshot could not be saved.");
+  }
+}
+
+async function updateSubmission({ requester, submissionId, file }) {
+  assertObjectId(submissionId, "submission id");
+  const submission = await Submission.findOne({
+    _id: submissionId,
+    student: getUserId(requester),
+  }).populate("assignment");
+
+  if (!submission) {
+    throw new AppError("Submission not found.", 404);
+  }
+
+  const assignment = submission.assignment;
+  assertCanReplace(submission, assignment);
 
   try {
     await batchAccessService.assertStudentEnrolled(getUserId(requester), assignment.batch);
@@ -132,25 +159,9 @@ async function updateSubmission({ requester, submissionId, file }) {
     // generations is lifetime data, so keep it even though the draft is reset.
     const generations = submission.aiDraft?.generations || 0;
 
-    submission.filePath = file.filename;
-    submission.fileName = sanitizeDisplayFileName(file.originalname);
-    submission.fileSize = file.size;
-    submission.mimeType = file.mimetype;
-    submission.status = "submitted";
-    submission.grade = null;
-    submission.feedback = null;
-    submission.gradedBy = null;
-    submission.gradedAt = null;
-    submission.submittedAt = new Date();
-    submission.aiDraft = undefined;
+    applyReplacementFile(submission, file);
     await submission.save();
-
-    try {
-      // Copy the new ZIP text before the request ends, while the file still exists.
-      await aiDraftService.saveSnapshot(submission, file, { generations });
-    } catch {
-      console.error("AI snapshot could not be saved.");
-    }
+    await saveReplacementSnapshot(submission, file, generations);
 
     if (previousPath) {
       await removeFile(resolveUploadPath(previousPath));
@@ -163,4 +174,4 @@ async function updateSubmission({ requester, submissionId, file }) {
   }
 }
 
-module.exports = { createSubmission, updateSubmission, validateUploadedFile };
+module.exports = { createSubmission, updateSubmission };

@@ -142,5 +142,4 @@ module.exports = {
   applyUpdateFields,
   buildCreateFields,
   isExpired,
-  validateFileTypes,
 };

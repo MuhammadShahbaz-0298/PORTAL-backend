@@ -61,6 +61,65 @@ async function listUsers({ requester, query }) {
   return { items: users, pagination, total };
 }
 
+function applyNameAndEmail(user, fields) {
+  if (fields.name !== undefined) {
+    user.name = assertString(fields.name, "name", { maxLength: NAME_MAX_LENGTH });
+  }
+
+  if (fields.email !== undefined) {
+    user.email = assertEmail(fields.email);
+  }
+}
+
+async function applyRoleChange(user, fields, isSelf, changes) {
+  if (fields.role === undefined) {
+    return;
+  }
+
+  const nextRole = await validateRole(fields.role);
+
+  if (isSelf && nextRole !== user.role) {
+    throw new AppError("You cannot change your own role.", 400);
+  }
+
+  if (nextRole !== user.role) {
+    changes.revokeSessions = true;
+  }
+  user.role = nextRole;
+}
+
+function applyPasswordChange(user, fields, changes) {
+  if (fields.password === undefined) {
+    return;
+  }
+
+  user.password = assertPassword(fields.password);
+  changes.revokeSessions = true;
+}
+
+function applyStatusAndPermissions(user, fields, isSelf, changes) {
+  if (fields.active !== undefined) {
+    const nextActive = assertBoolean(fields.active, "active");
+
+    if (isSelf && !nextActive) {
+      throw new AppError("You cannot disable your own account.", 400);
+    }
+
+    if (nextActive !== user.active) {
+      changes.revokeSessions = true;
+    }
+    user.active = nextActive;
+    if (nextActive) user.archivedAt = null;
+  }
+
+  if (fields.permissions !== undefined) {
+    if (!Array.isArray(fields.permissions)) {
+      throw new AppError("Permissions must be an array.", 400);
+    }
+    user.permissions = normalizePermissions(fields.permissions);
+  }
+}
+
 async function updateUser({ requester, userId, payload }) {
   assertObjectId(userId, "user id");
   const user = await User.findById(userId);
@@ -78,54 +137,16 @@ async function updateUser({ requester, userId, payload }) {
     "permissions",
   ]);
   const isSelf = String(user._id) === String(getUserId(requester));
-  let shouldRevokeSessions = false;
+  const changes = { revokeSessions: false };
 
-  if (fields.name !== undefined) {
-    user.name = assertString(fields.name, "name", { maxLength: NAME_MAX_LENGTH });
-  }
-
-  if (fields.email !== undefined) {
-    user.email = assertEmail(fields.email);
-  }
-
-  if (fields.role !== undefined) {
-    const nextRole = await validateRole(fields.role);
-
-    if (isSelf && nextRole !== user.role) {
-      throw new AppError("You cannot change your own role.", 400);
-    }
-
-    shouldRevokeSessions = shouldRevokeSessions || nextRole !== user.role;
-    user.role = nextRole;
-  }
-
-  if (fields.password !== undefined) {
-    user.password = assertPassword(fields.password);
-    shouldRevokeSessions = true;
-  }
-
-  if (fields.active !== undefined) {
-    const nextActive = assertBoolean(fields.active, "active");
-
-    if (isSelf && !nextActive) {
-      throw new AppError("You cannot disable your own account.", 400);
-    }
-
-    shouldRevokeSessions = shouldRevokeSessions || nextActive !== user.active;
-    user.active = nextActive;
-    if (nextActive) user.archivedAt = null;
-  }
-
-  if (fields.permissions !== undefined) {
-    if (!Array.isArray(fields.permissions)) {
-      throw new AppError("Permissions must be an array.", 400);
-    }
-    user.permissions = normalizePermissions(fields.permissions);
-  }
+  applyNameAndEmail(user, fields);
+  await applyRoleChange(user, fields, isSelf, changes);
+  applyPasswordChange(user, fields, changes);
+  applyStatusAndPermissions(user, fields, isSelf, changes);
 
   await user.save();
 
-  if (shouldRevokeSessions) {
+  if (changes.revokeSessions) {
     await sessionService.revokeAllForUser(user._id);
   }
 

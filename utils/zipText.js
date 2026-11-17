@@ -129,6 +129,15 @@ function scorePath(fileName) {
   return 2;
 }
 
+// Best files first. Files with the same score keep their order from the ZIP.
+function compareCandidates(left, right) {
+  if (left.score !== right.score) {
+    return left.score - right.score;
+  }
+
+  return left.index - right.index;
+}
+
 // Read one entry and stop at maxBytes. It returns real bytes, not the declared size.
 function readEntryBytes(zipfile, entry, maxBytes) {
   return new Promise((resolve, reject) => {
@@ -214,75 +223,92 @@ function looksLikeText(buffer) {
   return controlCharacters / Math.max(text.length, 1) < 0.05;
 }
 
+// Only real source files are worth sending to the AI.
+function collectCandidates(entries) {
+  const candidates = [];
+
+  entries.forEach((entry, index) => {
+    if (entry.fileName.endsWith("/")) {
+      return;
+    }
+
+    const entryPath = normalizeEntryPath(entry.fileName);
+    if (!entryPath || shouldSkipPath(entryPath)) {
+      return;
+    }
+
+    candidates.push({ entry, path: entryPath, index, score: scorePath(entryPath) });
+  });
+
+  candidates.sort(compareCandidates);
+  return candidates;
+}
+
+// Adds one readable file to the result. Unreadable files are simply skipped.
+async function addCandidateText(zipfile, candidate, limits, collected) {
+  let readResult;
+  try {
+    readResult = await readEntryBytes(zipfile, candidate.entry, limits.maxFileBytes);
+  } catch {
+    // Unreadable entries are skipped; the rest of the archive is still useful.
+    return;
+  }
+
+  if (readResult.truncated) {
+    collected.truncated = true;
+  }
+
+  if (!looksLikeText(readResult.buffer)) {
+    return;
+  }
+
+  const text = readResult.buffer.toString("utf8");
+  if (!text.trim()) {
+    return;
+  }
+
+  const remainingChars = limits.maxTotalChars - collected.totalChars;
+  const finalText = text.length > remainingChars ? text.slice(0, remainingChars) : text;
+
+  if (finalText.length < text.length) {
+    collected.truncated = true;
+  }
+
+  collected.files.push({ path: candidate.path, text: finalText });
+  collected.totalChars += finalText.length;
+}
+
+async function collectFileText(zipfile, candidates, limits) {
+  const collected = { files: [], truncated: false, totalChars: 0 };
+
+  for (const candidate of candidates) {
+    if (
+      collected.files.length >= limits.maxFiles ||
+      collected.totalChars >= limits.maxTotalChars
+    ) {
+      collected.truncated = true;
+      break;
+    }
+
+    await addCandidateText(zipfile, candidate, limits, collected);
+  }
+
+  return collected;
+}
+
 async function extractZipText(filePath, options = {}) {
-  const maxFiles = options.maxFiles ?? AI_MAX_FILES;
-  const maxFileBytes = options.maxFileBytes ?? AI_MAX_FILE_BYTES;
-  const maxTotalChars = options.maxTotalChars ?? AI_DEFAULT_MAX_INPUT_CHARS;
+  const limits = {
+    maxFiles: options.maxFiles ?? AI_MAX_FILES,
+    maxFileBytes: options.maxFileBytes ?? AI_MAX_FILE_BYTES,
+    maxTotalChars: options.maxTotalChars ?? AI_DEFAULT_MAX_INPUT_CHARS,
+  };
 
   const zipfile = await openZip(filePath);
 
   try {
     const entries = await readEntries(zipfile);
-    const candidates = [];
-
-    entries.forEach((entry, index) => {
-      if (entry.fileName.endsWith("/")) {
-        return;
-      }
-
-      const path = normalizeEntryPath(entry.fileName);
-      if (!path || shouldSkipPath(path)) {
-        return;
-      }
-
-      candidates.push({ entry, path, index, score: scorePath(path) });
-    });
-
-    candidates.sort((left, right) => left.score - right.score || left.index - right.index);
-
-    const files = [];
-    let totalChars = 0;
-    let truncated = false;
-
-    for (const candidate of candidates) {
-      if (files.length >= maxFiles || totalChars >= maxTotalChars) {
-        truncated = true;
-        break;
-      }
-
-      let readResult;
-      try {
-        readResult = await readEntryBytes(zipfile, candidate.entry, maxFileBytes);
-      } catch {
-        // Unreadable entries are skipped; the rest of the archive is still useful.
-        continue;
-      }
-
-      if (readResult.truncated) {
-        truncated = true;
-      }
-
-      if (!looksLikeText(readResult.buffer)) {
-        continue;
-      }
-
-      const text = readResult.buffer.toString("utf8");
-      if (!text.trim()) {
-        continue;
-      }
-
-      const remainingChars = maxTotalChars - totalChars;
-      const finalText = text.length > remainingChars ? text.slice(0, remainingChars) : text;
-
-      if (finalText.length < text.length) {
-        truncated = true;
-      }
-
-      files.push({ path: candidate.path, text: finalText });
-      totalChars += finalText.length;
-    }
-
-    return { files, truncated, totalChars };
+    const candidates = collectCandidates(entries);
+    return await collectFileText(zipfile, candidates, limits);
   } finally {
     zipfile.close();
   }

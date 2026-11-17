@@ -93,7 +93,6 @@ function clearAuthCookies(response, cookieSettings) {
 }
 
 module.exports = {
-  parseCookies,
   getAccessToken,
   getRefreshToken,
   setAuthCookies,

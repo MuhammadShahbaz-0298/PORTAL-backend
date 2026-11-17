@@ -137,10 +137,6 @@ async function refreshSession({ refreshToken, request }) {
   };
 }
 
-async function logoutSession(sessionId) {
-  await sessionService.revokeSession(sessionId);
-}
-
 async function logoutAllSessions(userId) {
   await sessionService.revokeAllForUser(userId);
 }
@@ -148,6 +144,5 @@ async function logoutAllSessions(userId) {
 module.exports = {
   loginUser,
   refreshSession,
-  logoutSession,
   logoutAllSessions,
 };

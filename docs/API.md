@@ -637,7 +637,7 @@ AI draft object (teachers/admins only, `snapshot` never returned):
   "suggestedMarks": 82,
   "strengths": ["Clear variable names"],
   "improvements": ["Add a test for the empty input"],
-  "model": "llama-3.3-70b-versatile",
+  "model": "openai/gpt-oss-120b",
   "attempts": 1,
   "generations": 1,
   "error": "",

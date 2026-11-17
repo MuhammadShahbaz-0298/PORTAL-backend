@@ -76,26 +76,26 @@ and run `node scripts/seedDemo.js --apply`.
 
 ## Environment variables
 
-| Name                                            | Required      | Default                   | Notes                                                     |
-| ----------------------------------------------- | ------------- | ------------------------- | --------------------------------------------------------- |
-| `PORT`                                          | no            | `5000`                    | API port.                                                 |
-| `NODE_ENV`                                      | no            | `development`             | Runtime environment.                                      |
-| `MONGO_URI`                                     | yes           |                           | Must start with `mongodb://` or `mongodb+srv://`.         |
-| `JWT_SECRET`                                    | yes           |                           | At least 64 random characters, not an example value.      |
-| `FRONTEND_URL`                                  | yes           |                           | Exact frontend origin allowed by CORS. No trailing slash. |
-| `ACCESS_TOKEN_MINUTES`                          | no            | `10`                      | Must not be longer than the idle timeout.                 |
-| `REFRESH_TOKEN_DAYS`                            | no            | `7`                       | Refresh token life.                                       |
-| `IDLE_TIMEOUT_MINUTES`                          | no            | `10`                      | No request for this long logs the user out.               |
-| `SESSION_MAX_HOURS`                             | no            | `24`                      | Hard cap for one login.                                   |
-| `COOKIE_DOMAIN`                                 | no            | empty                     | Only for a shared parent domain such as `.example.com`.   |
-| `UPLOAD_DIR`                                    | no            | `./uploads`               | Must be writable. See the storage note below.             |
-| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | for seeding   |                           | Used only by `npm run seed:admin`.                        |
-| `SEED_DEMO_PASSWORD`                            | for demo seed |                           | Used only by `scripts/seedDemo.js`.                       |
-| `AI_API_KEY`                                    | no            | empty                     | Empty switches AI drafts off. Never commit a real key.    |
-| `AI_ENABLED`                                    | no            | `true`                    | Set to `false` to switch AI drafts off even with a key.   |
-| `AI_BASE_URL`                                   | no            | Groq URL                  | Any OpenAI-compatible chat endpoint.                      |
-| `AI_MODEL`                                      | no            | `llama-3.3-70b-versatile` | Model name sent to the AI service.                        |
-| `AI_MAX_INPUT_CHARS`                            | no            | `14000`                   | 2000–30000 characters of student code sent to the AI.     |
+| Name                                            | Required      | Default               | Notes                                                     |
+| ----------------------------------------------- | ------------- | --------------------- | --------------------------------------------------------- |
+| `PORT`                                          | no            | `5000`                | API port.                                                 |
+| `NODE_ENV`                                      | no            | `development`         | Runtime environment.                                      |
+| `MONGO_URI`                                     | yes           |                       | Must start with `mongodb://` or `mongodb+srv://`.         |
+| `JWT_SECRET`                                    | yes           |                       | At least 64 random characters, not an example value.      |
+| `FRONTEND_URL`                                  | yes           |                       | Exact frontend origin allowed by CORS. No trailing slash. |
+| `ACCESS_TOKEN_MINUTES`                          | no            | `10`                  | Must not be longer than the idle timeout.                 |
+| `REFRESH_TOKEN_DAYS`                            | no            | `7`                   | Refresh token life.                                       |
+| `IDLE_TIMEOUT_MINUTES`                          | no            | `10`                  | No request for this long logs the user out.               |
+| `SESSION_MAX_HOURS`                             | no            | `24`                  | Hard cap for one login.                                   |
+| `COOKIE_DOMAIN`                                 | no            | empty                 | Only for a shared parent domain such as `.example.com`.   |
+| `UPLOAD_DIR`                                    | no            | `./uploads`           | Must be writable. See the storage note below.             |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | for seeding   |                       | Used only by `npm run seed:admin`.                        |
+| `SEED_DEMO_PASSWORD`                            | for demo seed |                       | Used only by `scripts/seedDemo.js`.                       |
+| `AI_API_KEY`                                    | no            | empty                 | Empty switches AI drafts off. Never commit a real key.    |
+| `AI_ENABLED`                                    | no            | `true`                | Set to `false` to switch AI drafts off even with a key.   |
+| `AI_BASE_URL`                                   | no            | Groq URL              | Any OpenAI-compatible chat endpoint.                      |
+| `AI_MODEL`                                      | no            | `openai/gpt-oss-120b` | Model name sent to the AI service.                        |
+| `AI_MAX_INPUT_CHARS`                            | no            | `14000`               | 2000–30000 characters of student code sent to the AI.     |
 
 Never commit `.env`. `.gitignore` already excludes it.
 

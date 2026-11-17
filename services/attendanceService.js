@@ -27,6 +27,60 @@ function addOneDay(date) {
   return new Date(date.getTime() + 24 * 60 * 60 * 1000);
 }
 
+// "Today" follows the teacher's clock, so the offset is applied before the check.
+function readAttendanceDate(fields) {
+  const date = startOfDay(fields.date);
+  const timezoneOffset =
+    fields.timezoneOffset === undefined
+      ? 0
+      : assertNumber(fields.timezoneOffset, "timezoneOffset", {
+          min: -840,
+          max: 720,
+          integer: true,
+        });
+  const today = startOfDay(new Date(Date.now() - timezoneOffset * 60 * 1000));
+
+  if (date > today) {
+    throw new AppError("Attendance cannot be marked for a future date.", 400);
+  }
+
+  return date;
+}
+
+async function assertBatchAvailable(requester, studentId, batchId) {
+  await batchAccessService.assertCanManageBatch(requester, batchId);
+  await batchAccessService.assertStudentEnrolled(studentId, batchId);
+  const batch = await Batch.findOne({ _id: batchId, active: true }).select("name");
+
+  if (!batch) {
+    throw new AppError("Batch not found.", 404);
+  }
+
+  return batch;
+}
+
+function applyLeaveReason(update, fields, status) {
+  if (status === "leave") {
+    const leaveReason = assertString(fields.leaveReason, "leave reason", {
+      maxLength: FEEDBACK_MAX_LENGTH,
+    });
+    if (!leaveReason.trim()) {
+      throw new AppError("leave reason is required.", 400);
+    }
+    update.$set.leaveReason = leaveReason;
+    return;
+  }
+
+  if (
+    fields.leaveReason !== undefined &&
+    fields.leaveReason !== null &&
+    String(fields.leaveReason).trim() !== ""
+  ) {
+    throw new AppError("leave reason is only allowed when status is leave.", 400);
+  }
+  update.$unset = { leaveReason: "" };
+}
+
 async function addAttendance({ requester, payload }) {
   const fields = pickFields(payload, [
     "studentId",
@@ -38,29 +92,10 @@ async function addAttendance({ requester, payload }) {
   ]);
   const studentId = assertObjectId(fields.studentId, "student id");
   const batchId = assertObjectId(fields.batchId, "batch id");
-  const date = startOfDay(fields.date);
-  const timezoneOffset =
-    fields.timezoneOffset === undefined
-      ? 0
-      : assertNumber(fields.timezoneOffset, "timezoneOffset", {
-          min: -840,
-          max: 720,
-          integer: true,
-        });
-  const today = startOfDay(new Date(Date.now() - timezoneOffset * 60 * 1000));
-  if (date > today) {
-    throw new AppError("Attendance cannot be marked for a future date.", 400);
-  }
+  const date = readAttendanceDate(fields);
   const status = assertEnum(fields.status, ATTENDANCE_STATUSES, "status");
 
-  await batchAccessService.assertCanManageBatch(requester, batchId);
-  await batchAccessService.assertStudentEnrolled(studentId, batchId);
-  const batch = await Batch.findOne({ _id: batchId, active: true }).select("name");
-
-  if (!batch) {
-    throw new AppError("Batch not found.", 404);
-  }
-
+  const batch = await assertBatchAvailable(requester, studentId, batchId);
   const update = {
     $set: {
       status,
@@ -70,24 +105,7 @@ async function addAttendance({ requester, payload }) {
     $setOnInsert: { student: studentId, batch: batchId, date },
   };
 
-  if (status === "leave") {
-    const leaveReason = assertString(fields.leaveReason, "leave reason", {
-      maxLength: FEEDBACK_MAX_LENGTH,
-    });
-    if (!leaveReason.trim()) {
-      throw new AppError("leave reason is required.", 400);
-    }
-    update.$set.leaveReason = leaveReason;
-  } else {
-    if (
-      fields.leaveReason !== undefined &&
-      fields.leaveReason !== null &&
-      String(fields.leaveReason).trim() !== ""
-    ) {
-      throw new AppError("leave reason is only allowed when status is leave.", 400);
-    }
-    update.$unset = { leaveReason: "" };
-  }
+  applyLeaveReason(update, fields, status);
 
   return Attendance.findOneAndUpdate(
     { student: studentId, batch: batchId, date },

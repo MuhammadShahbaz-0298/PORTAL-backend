@@ -33,13 +33,7 @@ function parseRetryAfter(headerValue) {
   return Math.max(0, Math.ceil((retryDate.getTime() - Date.now()) / 1000));
 }
 
-async function askAI({ system, prompt }) {
-  const settings = readAiSettings();
-
-  if (!settings.enabled) {
-    throw new AiRequestError("AI drafts are disabled.", { statusCode: 503 });
-  }
-
+function buildRequestBody(settings, system, prompt) {
   const body = {
     model: settings.model,
     messages: [
@@ -54,6 +48,45 @@ async function askAI({ system, prompt }) {
     body.reasoning_effort = "low";
   }
 
+  return body;
+}
+
+function assertProviderOk(response) {
+  if (response.status === 429) {
+    const retryAfterSeconds = parseRetryAfter(response.headers.get("retry-after"));
+    throw new AiRequestError(
+      `AI provider is rate limited. Try again in about ${retryAfterSeconds} seconds.`,
+      { statusCode: 429, retryAfterSeconds },
+    );
+  }
+
+  if (!response.ok) {
+    throw new AiRequestError(`AI provider returned HTTP ${response.status}.`, {
+      statusCode: response.status,
+    });
+  }
+}
+
+async function readReplyText(response) {
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+
+  if (typeof content !== "string" || !content.trim()) {
+    throw new AiRequestError("AI returned no text.");
+  }
+
+  return content;
+}
+
+async function askAI({ system, prompt }) {
+  const settings = readAiSettings();
+
+  if (!settings.enabled) {
+    throw new AiRequestError("AI drafts are disabled.", { statusCode: 503 });
+  }
+
+  const body = buildRequestBody(settings, system, prompt);
+
   try {
     const response = await fetch(`${settings.baseUrl}/chat/completions`, {
       method: "POST",
@@ -65,28 +98,8 @@ async function askAI({ system, prompt }) {
       signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
     });
 
-    if (response.status === 429) {
-      const retryAfterSeconds = parseRetryAfter(response.headers.get("retry-after"));
-      throw new AiRequestError(
-        `AI provider is rate limited. Try again in about ${retryAfterSeconds} seconds.`,
-        { statusCode: 429, retryAfterSeconds },
-      );
-    }
-
-    if (!response.ok) {
-      throw new AiRequestError(`AI provider returned HTTP ${response.status}.`, {
-        statusCode: response.status,
-      });
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-
-    if (typeof content !== "string" || !content.trim()) {
-      throw new AiRequestError("AI returned no text.");
-    }
-
-    return content;
+    assertProviderOk(response);
+    return await readReplyText(response);
   } catch (error) {
     if (error.name === "AbortError" || error.name === "TimeoutError") {
       throw new AiRequestError("AI provider took too long to answer.", { statusCode: 504 });
@@ -96,4 +109,4 @@ async function askAI({ system, prompt }) {
   }
 }
 
-module.exports = { askAI, AiRequestError, parseRetryAfter };
+module.exports = { askAI };

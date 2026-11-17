@@ -119,4 +119,4 @@ async function reportOrphans({ tracker }) {
   });
 }
 
-module.exports = { reportMissingReferences, reportOrphans };
+module.exports = { reportOrphans };

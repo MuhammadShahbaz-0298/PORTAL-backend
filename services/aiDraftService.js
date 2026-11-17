@@ -57,7 +57,15 @@ async function saveSnapshot(submission, file, options = {}) {
   }
 
   // generations is a lifetime counter, so replacing a file must not reset it.
-  const generations = options.generations ?? submission.aiDraft?.generations ?? 0;
+  let generations;
+
+  if (options.generations !== undefined) {
+    generations = options.generations;
+  } else if (submission.aiDraft?.generations !== undefined) {
+    generations = submission.aiDraft.generations;
+  } else {
+    generations = 0;
+  }
 
   if (generations >= AI_MAX_GENERATIONS) {
     submission.aiDraft = {
@@ -99,53 +107,74 @@ async function saveSnapshot(submission, file, options = {}) {
   return submission;
 }
 
-async function runGeneration(submissionId, settings, options) {
-  const submission = await Submission.findById(submissionId)
+async function loadSubmissionForGeneration(submissionId) {
+  return Submission.findById(submissionId)
     .select("+aiDraft.snapshot")
     .populate("assignment", "title description rubric");
+}
 
-  if (!submission || !submission.aiDraft) {
-    return null;
-  }
+function hasUsableSnapshot(draft) {
+  return Boolean(
+    draft.snapshot && Array.isArray(draft.snapshot.files) && draft.snapshot.files.length > 0,
+  );
+}
 
+// The caller must already have a submission with an aiDraft object.
+async function markDraftFailed(submission, message) {
+  submission.aiDraft.status = "failed";
+  submission.aiDraft.error = message;
+  await submission.save();
+  return submission;
+}
+
+// Returns false when this submission already used all lifetime generations.
+async function countGeneration(submission) {
   const draft = submission.aiDraft;
 
-  if (
-    !draft.snapshot ||
-    !Array.isArray(draft.snapshot.files) ||
-    draft.snapshot.files.length === 0
-  ) {
-    draft.status = "failed";
-    draft.error = "No saved file snapshot.";
-    await submission.save();
-    return submission;
+  if ((draft.generations || 0) >= AI_MAX_GENERATIONS) {
+    return false;
   }
 
-  if (options.countGeneration !== false) {
-    if ((draft.generations || 0) >= AI_MAX_GENERATIONS) {
-      draft.status = "failed";
-      draft.error = "AI draft limit reached.";
-      await submission.save();
-      return submission;
-    }
+  draft.generations = (draft.generations || 0) + 1;
+  draft.attempts = 0;
+  draft.status = "pending";
+  draft.requestedAt = new Date();
+  draft.error = "";
+  await submission.save();
+  return true;
+}
 
-    draft.generations = (draft.generations || 0) + 1;
-    draft.attempts = 0;
-    draft.status = "pending";
-    draft.requestedAt = new Date();
-    draft.error = "";
-    await submission.save();
-  }
-
+async function buildPrompt(submission, draft) {
   const template = await fs.readFile(PROMPT_FILE, "utf8");
   const assignment = submission.assignment || {};
-  const prompt = renderPrompt(template, {
+
+  return renderPrompt(template, {
     title: assignment.title || "",
     description: assignment.description || "",
     rubric: assignment.rubric || "",
     files: formatFiles(draft.snapshot.files),
   });
+}
 
+async function saveDraftReply(submission, settings, prompt) {
+  const draft = submission.aiDraft;
+  const rawReply = await askAI({ system: SYSTEM_PROMPT, prompt });
+  const parsed = parseDraftResponse(rawReply);
+
+  draft.status = "ready";
+  draft.feedback = parsed.feedback;
+  draft.suggestedMarks = parsed.suggestedMarks;
+  draft.strengths = parsed.strengths;
+  draft.improvements = parsed.improvements;
+  draft.model = settings.model;
+  draft.error = "";
+  draft.generatedAt = new Date();
+  await submission.save();
+  return submission;
+}
+
+async function runAttempts(submission, settings, prompt, options) {
+  const draft = submission.aiDraft;
   let lastError = null;
 
   for (let attempt = (draft.attempts || 0) + 1; attempt <= AI_MAX_ATTEMPTS; attempt += 1) {
@@ -153,19 +182,7 @@ async function runGeneration(submissionId, settings, options) {
     await submission.save();
 
     try {
-      const rawReply = await askAI({ system: SYSTEM_PROMPT, prompt });
-      const parsed = parseDraftResponse(rawReply);
-
-      draft.status = "ready";
-      draft.feedback = parsed.feedback;
-      draft.suggestedMarks = parsed.suggestedMarks;
-      draft.strengths = parsed.strengths;
-      draft.improvements = parsed.improvements;
-      draft.model = settings.model;
-      draft.error = "";
-      draft.generatedAt = new Date();
-      await submission.save();
-      return submission;
+      return await saveDraftReply(submission, settings, prompt);
     } catch (error) {
       lastError = error;
 
@@ -185,6 +202,30 @@ async function runGeneration(submissionId, settings, options) {
   draft.error = String(shortError(lastError)).slice(0, AI_ERROR_MAX_LENGTH);
   await submission.save();
   return submission;
+}
+
+async function runGeneration(submissionId, settings, options) {
+  const submission = await loadSubmissionForGeneration(submissionId);
+
+  if (!submission || !submission.aiDraft) {
+    return null;
+  }
+
+  if (!hasUsableSnapshot(submission.aiDraft)) {
+    return markDraftFailed(submission, "No saved file snapshot.");
+  }
+
+  if (options.countGeneration !== false) {
+    const started = await countGeneration(submission);
+
+    if (!started) {
+      return markDraftFailed(submission, "AI draft limit reached.");
+    }
+  }
+
+  const prompt = await buildPrompt(submission, submission.aiDraft);
+
+  return runAttempts(submission, settings, prompt, options);
 }
 
 async function generateDraft(submissionId, options = {}) {

@@ -15,6 +15,5 @@ const getUserRole = (user) =>
 
 const isAdmin = (user) => getUserRole(user) === ROLES.ADMIN;
 const isTeacher = (user) => getUserRole(user) === ROLES.TEACHER;
-const isStudent = (user) => getUserRole(user) === ROLES.STUDENT;
 
-module.exports = { getUserId, getUserRole, isAdmin, isTeacher, isStudent };
+module.exports = { getUserId, getUserRole, isAdmin, isTeacher };

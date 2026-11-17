@@ -94,4 +94,4 @@ function renderPrompt(template, values) {
   });
 }
 
-module.exports = { parseDraftResponse, renderPrompt, extractJsonObject, stripEmails, clampMarks };
+module.exports = { parseDraftResponse, renderPrompt };

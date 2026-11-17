@@ -76,7 +76,6 @@ async function assertStudentEnrolled(studentId, batchId) {
 }
 
 module.exports = {
-  canManageBatch,
   assertCanManageBatch,
   assertCanAccessBatch,
   getTeacherBatchIds,

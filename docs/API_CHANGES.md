@@ -367,7 +367,7 @@ responses. It is **optional** and only appears when AI drafts are configured.
   "suggestedMarks": 82,
   "strengths": ["..."],
   "improvements": ["..."],
-  "model": "llama-3.3-70b-versatile",
+  "model": "openai/gpt-oss-120b",
   "attempts": 1,
   "generations": 1,
   "error": "",

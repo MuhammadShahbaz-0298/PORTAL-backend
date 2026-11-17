@@ -166,5 +166,4 @@ module.exports = {
   assertOptionalString,
   assertPlainObject,
   assertString,
-  isPlainObject,
 };
