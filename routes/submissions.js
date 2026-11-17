@@ -12,6 +12,8 @@ const {
   getSubmissions,
   gradeSubmission,
   downloadSubmission,
+  regenerateAiDraft,
+  discardAiDraft,
 } = require("../controllers/submissionController");
 
 const router = express.Router();
@@ -38,6 +40,18 @@ router.patch(
   requirePermission("submissions.grade"),
   requireOwnSubmission,
   gradeSubmission,
+);
+router.post(
+  "/:id/ai-draft",
+  requirePermission("submissions.grade"),
+  requireOwnSubmission,
+  regenerateAiDraft,
+);
+router.patch(
+  "/:id/ai-draft/discard",
+  requirePermission("submissions.grade"),
+  requireOwnSubmission,
+  discardAiDraft,
 );
 
 module.exports = router;

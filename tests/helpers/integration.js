@@ -93,6 +93,31 @@ class TestClient {
   delete(requestPath, options = {}) {
     return this.request("DELETE", requestPath, options);
   }
+
+  // Uploads use multipart/form-data, so they cannot use the JSON request helper.
+  async upload(requestPath, formData, method = "POST") {
+    const headers = {
+      "x-csrf-protection": "1",
+      cookie: this.buildCookieHeader(),
+    };
+    const response = await fetch(`${this.baseUrl}${requestPath}`, {
+      method,
+      headers,
+      body: formData,
+    });
+
+    this.storeCookies(response);
+    const responseText = await response.text();
+    let data = null;
+
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      data = responseText;
+    }
+
+    return { status: response.status, data, headers: response.headers };
+  }
 }
 
 async function startTestEnvironment() {

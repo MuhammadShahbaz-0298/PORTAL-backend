@@ -173,7 +173,7 @@ See `docs/DATABASE.md`.
 ## 10. Transport and platform
 
 - `app.set("trust proxy", 1)` so `req.ip` and `secure` cookies work behind
-  Railway's proxy.
+  Render's proxy.
 - Graceful shutdown on `SIGTERM`/`SIGINT`, with a 10-second force exit.
 - Helmet sets `X-Content-Type-Options`, `X-Frame-Options`, HSTS and related
   headers.
@@ -188,14 +188,14 @@ See `docs/DATABASE.md`.
 | No 2FA                                          | Not implemented                                     | Add TOTP for admins first.                                                   |
 | Tokens valid until expiry after secret rotation | Standard JWT behavior                               | Rotate by revoking all sessions, then change `JWT_SECRET`.                   |
 | Third-party cookie blocking                     | Cross-site cookie warning                           | Serve frontend and API from one parent domain.                               |
-| Ephemeral uploads on Railway                    | Configurable `UPLOAD_DIR`                           | Mount a volume or use S3-compatible storage.                                 |
+| Ephemeral uploads on Render                     | Configurable `UPLOAD_DIR`                           | Mount a volume or use S3-compatible storage.                                 |
 | No malware scan                                 | ZIP structure checks only                           | Scan uploads with ClamAV or an object-storage scanner before staff download. |
 | No audit trail for reads                        | Security events cover auth only                     | Add an append-only audit collection if required by policy.                   |
-| In-process rate limiting for all routes         | Login only                                          | Add a general IP rate limit at the proxy (Railway/Cloudflare).               |
+| In-process rate limiting for all routes         | Login only                                          | Add a general IP rate limit at the proxy (Render/Cloudflare).                |
 
 ## 12. Security checklist before deploy
 
-- [ ] `JWT_SECRET` generated with `crypto.randomBytes(64)`, stored only in Railway variables.
+- [ ] `JWT_SECRET` generated with `crypto.randomBytes(64)`, stored only in Render variables.
 - [ ] `NODE_ENV=production`.
 - [ ] `FRONTEND_URL` is the exact HTTPS origin.
 - [ ] Both services are HTTPS.

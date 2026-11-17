@@ -17,6 +17,7 @@ const {
 const { assertArchiveIsSafe } = require("../utils/zip");
 const batchAccessService = require("./batchAccessService");
 const assignmentService = require("./assignmentService");
+const aiDraftService = require("./aiDraftService");
 
 function requireUploadedFile(file) {
   if (!file) {
@@ -83,6 +84,14 @@ async function createSubmission({ requester, assignmentId, file }) {
       mimeType: file.mimetype,
     });
 
+    try {
+      // The ZIP is still on disk here, so copy what the AI needs into MongoDB now.
+      await aiDraftService.saveSnapshot(submission, file);
+    } catch {
+      // AI work must never make the upload fail.
+      console.error("AI snapshot could not be saved.");
+    }
+
     return submission.populate(["assignment", "batch", "student"]);
   } catch (error) {
     await removeFile(file.path);
@@ -106,10 +115,22 @@ async function updateSubmission({ requester, submissionId, file }) {
     throw new AppError("This assignment has expired.", 410);
   }
 
+  // A graded submission is final. A rejected one may always be replaced.
+  if (submission.status === "graded") {
+    throw new AppError("A graded submission cannot be replaced.", 409);
+  }
+
+  // "disabled" only blocks a normal submitted file, not a rejected resubmission.
+  if (assignment.resubmissionPolicy === "disabled" && submission.status === "submitted") {
+    throw new AppError("Resubmissions are disabled for this assignment.", 409);
+  }
+
   try {
     await batchAccessService.assertStudentEnrolled(getUserId(requester), assignment.batch);
     await validateUploadedFile(file, assignment);
     const previousPath = submission.filePath;
+    // generations is lifetime data, so keep it even though the draft is reset.
+    const generations = submission.aiDraft?.generations || 0;
 
     submission.filePath = file.filename;
     submission.fileName = sanitizeDisplayFileName(file.originalname);
@@ -121,7 +142,15 @@ async function updateSubmission({ requester, submissionId, file }) {
     submission.gradedBy = null;
     submission.gradedAt = null;
     submission.submittedAt = new Date();
+    submission.aiDraft = undefined;
     await submission.save();
+
+    try {
+      // Copy the new ZIP text before the request ends, while the file still exists.
+      await aiDraftService.saveSnapshot(submission, file, { generations });
+    } catch {
+      console.error("AI snapshot could not be saved.");
+    }
 
     if (previousPath) {
       await removeFile(resolveUploadPath(previousPath));

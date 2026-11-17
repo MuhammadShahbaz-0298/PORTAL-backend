@@ -1,6 +1,6 @@
 # API reference
 
-Base URL in production: `https://<your-api>.up.railway.app`
+Base URL in production: `https://<your-api>.onrender.com`
 
 All JSON endpoints expect and return `Content-Type: application/json` unless
 noted. Uploads are `multipart/form-data`.
@@ -96,6 +96,7 @@ Common codes:
 | `410`  | Assignment closed or expired.                              |
 | `429`  | Too many login attempts.                                   |
 | `500`  | Unexpected server error (details are only in server logs). |
+| `503`  | Optional service (AI drafts) is switched off.              |
 
 ### Limits
 
@@ -109,7 +110,7 @@ Common codes:
 
 ### `GET /health`
 
-Public. No CSRF header needed. Useful for Railway health checks.
+Public. No CSRF header needed. Useful for Render health checks.
 
 ```json
 { "success": true, "data": { "status": "ok" } }
@@ -411,6 +412,7 @@ Permission: `assignments.create`. Admin, or the owning teacher.
   "batch": "665f...",
   "title": "Week 1 homework",
   "description": "Upload a ZIP with your source files.",
+  "rubric": "Correctness 50%, readability 30%, tests 20%.",
   "dueDate": "2026-11-15T23:59:00.000Z",
   "allowedFileTypes": ["zip"],
   "maxFileSizeMb": 25,
@@ -423,6 +425,7 @@ Permission: `assignments.create`. Admin, or the owning teacher.
 | `batch`              | Required; must be owned by the teacher. |
 | `title`              | Required, ≤ 160 chars.                  |
 | `description`        | Optional, ≤ 5000 chars.                 |
+| `rubric`             | Optional marking guide, ≤ 5000 chars.   |
 | `dueDate`            | Required ISO date.                      |
 | `allowedFileTypes`   | Only `"zip"` is accepted today.         |
 | `maxFileSizeMb`      | 1–250, default 25.                      |
@@ -434,7 +437,7 @@ Permission: `assignments.create`. Admin, or the owning teacher.
 
 Permission: `assignments.update`. Admin, or the owning teacher.
 
-Accepts `title`, `description`, `dueDate`, `allowedFileTypes`,
+Accepts `title`, `description`, `rubric`, `dueDate`, `allowedFileTypes`,
 `maxFileSizeMb`, `resubmissionPolicy`, `active`.
 
 Setting `active: false` sets `closedAt`.
@@ -537,6 +540,10 @@ Scope:
 - Teacher: submissions in owned batches.
 - Student: their own only.
 
+Teachers and admins receive an `aiDraft` object when one exists. Students never
+receive `aiDraft` in any response. The stored AI source snapshot is never
+returned to anyone.
+
 ### `POST /api/submissions`
 
 Permission: `submissions.view` **and** role `student`.
@@ -562,10 +569,17 @@ Rules:
 Permission: `submissions.view` **and** role `student`.
 
 `multipart/form-data` with `file`. The student must own the submission, the
-assignment must allow resubmissions, and it must not be expired.
+assignment must not be expired, and the submission must not be graded.
 
 Replaces the stored file, resets grade/feedback/status and deletes the previous
 file from disk. Returns `200`.
+
+- `409` when the submission is already `graded`.
+- `409` when `resubmissionPolicy` is `disabled` and status is `submitted`.
+- A `rejected` submission may always be replaced, even when the policy is
+  `disabled`.
+- Replacing the file resets the AI draft but keeps its lifetime `generations`
+  counter.
 
 ### `GET /api/submissions/:id/download`
 
@@ -590,6 +604,49 @@ Permission: `submissions.grade`. Admin, or the owning teacher.
 - `status` optional: `graded` (default) or `rejected`.
 
 Returns the updated submission.
+
+When an AI draft exists with status `ready`, grading marks it `used` if the
+saved `feedback` exactly equals the draft text, otherwise `edited`. The AI never
+sets `grade`.
+
+### `POST /api/submissions/:id/ai-draft`
+
+Permission: `submissions.grade`. Admin, or the owning teacher.
+
+Regenerates the AI draft from the saved ZIP snapshot. Returns `200` with
+`aiDraft.status` set to `pending`; generation continues in the background.
+
+- `409` after 8 lifetime generations for this submission.
+- `409` when the saved snapshot is missing (for example after the ZIP was lost
+  on a restarted free-tier host). Replacing the ZIP creates a new snapshot.
+- `503` when AI drafts are switched off.
+
+### `PATCH /api/submissions/:id/ai-draft/discard`
+
+Permission: `submissions.grade`. Admin, or the owning teacher.
+
+Marks the current draft as `discarded`. Returns the updated submission. `404`
+when the submission has no AI draft.
+
+AI draft object (teachers/admins only, `snapshot` never returned):
+
+```json
+{
+  "status": "ready",
+  "feedback": "You explained the loop clearly. ...",
+  "suggestedMarks": 82,
+  "strengths": ["Clear variable names"],
+  "improvements": ["Add a test for the empty input"],
+  "model": "llama-3.3-70b-versatile",
+  "attempts": 1,
+  "generations": 1,
+  "error": "",
+  "generatedAt": "2026-11-17T10:00:00.000Z",
+  "requestedAt": "2026-11-17T09:59:00.000Z"
+}
+```
+
+Statuses: `pending`, `ready`, `failed`, `used`, `edited`, `discarded`.
 
 ---
 

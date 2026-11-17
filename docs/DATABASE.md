@@ -69,18 +69,19 @@ re-enrolling idempotent.
 
 ### `assignments`
 
-| Field                | Type               | Notes                      |
-| -------------------- | ------------------ | -------------------------- |
-| `batch`              | ObjectId → batches | Required.                  |
-| `title`              | String             | Required, ≤ 160.           |
-| `description`        | String             | ≤ 5000.                    |
-| `dueDate`            | Date               | Required.                  |
-| `allowedFileTypes`   | [String]           | Only `zip` today.          |
-| `maxFileSizeMb`      | Number             | Default 25, 1–250.         |
-| `resubmissionPolicy` | String             | `allowed` or `disabled`.   |
-| `createdBy`          | ObjectId → users   | Required.                  |
-| `active`             | Boolean            | `false` = archived/closed. |
-| `closedAt`           | Date               | Set on archive or close.   |
+| Field                | Type               | Notes                           |
+| -------------------- | ------------------ | ------------------------------- |
+| `batch`              | ObjectId → batches | Required.                       |
+| `title`              | String             | Required, ≤ 160.                |
+| `description`        | String             | ≤ 5000.                         |
+| `rubric`             | String             | Optional marking guide, ≤ 5000. |
+| `dueDate`            | Date               | Required.                       |
+| `allowedFileTypes`   | [String]           | Only `zip` today.               |
+| `maxFileSizeMb`      | Number             | Default 25, 1–250.              |
+| `resubmissionPolicy` | String             | `allowed` or `disabled`.        |
+| `createdBy`          | ObjectId → users   | Required.                       |
+| `active`             | Boolean            | `false` = archived/closed.      |
+| `closedAt`           | Date               | Set on archive or close.        |
 
 Indexes:
 
@@ -90,15 +91,15 @@ Indexes:
 
 ### `attendance`
 
-| Field       | Type               | Notes                                              |
-| ----------- | ------------------ | -------------------------------------------------- |
-| `student`   | ObjectId → users   | Required.                                          |
-| `batch`     | ObjectId → batches | Required.                                          |
-| `batchName` | String             | Snapshot so archived batches still display a name. |
-| `leaveReason` | String            | Reason for leave; max 2000 chars, optional (old records have no reason). |
-| `date`      | Date               | UTC midnight of the attendance day.                |
-| `status`    | String             | `present`, `absent`, `leave`.                      |
-| `enteredBy` | ObjectId → users   | Required.                                          |
+| Field         | Type               | Notes                                                                    |
+| ------------- | ------------------ | ------------------------------------------------------------------------ |
+| `student`     | ObjectId → users   | Required.                                                                |
+| `batch`       | ObjectId → batches | Required.                                                                |
+| `batchName`   | String             | Snapshot so archived batches still display a name.                       |
+| `leaveReason` | String             | Reason for leave; max 2000 chars, optional (old records have no reason). |
+| `date`        | Date               | UTC midnight of the attendance day.                                      |
+| `status`      | String             | `present`, `absent`, `leave`.                                            |
+| `enteredBy`   | ObjectId → users   | Required.                                                                |
 
 Indexes:
 
@@ -126,11 +127,34 @@ Indexes:
 | `gradedBy`    | ObjectId → users       | Nullable.                             |
 | `gradedAt`    | Date                   | Nullable.                             |
 | `submittedAt` | Date                   | Updated on re-upload.                 |
+| `aiDraft`     | Object                 | Optional AI feedback draft (below).   |
+
+`aiDraft` fields:
+
+| Field            | Type     | Notes                                                                 |
+| ---------------- | -------- | --------------------------------------------------------------------- |
+| `status`         | String   | `pending`, `ready`, `failed`, `used`, `edited`, `discarded`.          |
+| `feedback`       | String   | ≤ 1800 chars.                                                         |
+| `suggestedMarks` | Number   | 0–100 or `null`. The AI never writes `grade`.                         |
+| `strengths`      | [String] | Suggested strengths.                                                  |
+| `improvements`   | [String] | Suggested improvements.                                               |
+| `model`          | String   | Model name used for the draft.                                        |
+| `attempts`       | Number   | Tries used in the current generation (max 4).                         |
+| `generations`    | Number   | Lifetime counter, including automatic and manual runs (max 8).        |
+| `error`          | String   | Short safe error text.                                                |
+| `generatedAt`    | Date     | Set when status becomes `ready`.                                      |
+| `requestedAt`    | Date     | Set whenever status becomes `pending`; startup recovery uses it.      |
+| `snapshot`       | Object   | `files [{ path, text }]`, `truncated`, `totalChars`. `select: false`. |
+
+The snapshot is copied from the ZIP during the upload request, while the file
+still exists on disk. It is never returned by the API.
 
 Indexes:
 
 - `{ assignment: 1, student: 1 }` unique — one submission per student.
 - `{ batch: 1, submittedAt: -1 }`.
+- `{ "aiDraft.status": 1, "aiDraft.attempts": 1, "aiDraft.requestedAt": 1 }` —
+  startup recovery of unfinished drafts.
 
 ### `sessions`
 

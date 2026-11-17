@@ -22,7 +22,7 @@ const roleRoutes = require("./routes/roles");
 const app = express();
 
 app.disable("x-powered-by");
-// Railway sits in front of the app, so Express must trust one proxy hop.
+// Render sits in front of the app, so Express must trust one proxy hop.
 app.set("trust proxy", 1);
 
 app.use(

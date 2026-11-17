@@ -7,7 +7,48 @@ const {
   GRADE_MAX_LENGTH,
   FEEDBACK_MAX_LENGTH,
   GLOBAL_UPLOAD_MAX_BYTES,
+  AI_DRAFT_STATUSES,
+  AI_FEEDBACK_MAX_LENGTH,
+  AI_ERROR_MAX_LENGTH,
 } = require("../constants");
+
+// One source file saved from the ZIP during the upload request.
+const aiSnapshotFileSchema = new mongoose.Schema(
+  {
+    path: { type: String, maxlength: 300 },
+    text: { type: String },
+  },
+  { _id: false },
+);
+
+// Everything the AI needs is copied here while the ZIP still exists on disk.
+const aiSnapshotSchema = new mongoose.Schema(
+  {
+    files: { type: [aiSnapshotFileSchema], default: [] },
+    truncated: { type: Boolean, default: false },
+    totalChars: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const aiDraftSchema = new mongoose.Schema(
+  {
+    status: { type: String, enum: AI_DRAFT_STATUSES, default: "pending" },
+    feedback: { type: String, default: "", maxlength: AI_FEEDBACK_MAX_LENGTH },
+    suggestedMarks: { type: Number, default: null, min: 0, max: 100 },
+    strengths: { type: [String], default: [] },
+    improvements: { type: [String], default: [] },
+    model: { type: String, default: "", maxlength: 100 },
+    attempts: { type: Number, default: 0, min: 0 },
+    generations: { type: Number, default: 0, min: 0 },
+    error: { type: String, default: "", maxlength: AI_ERROR_MAX_LENGTH },
+    generatedAt: { type: Date, default: null },
+    requestedAt: { type: Date, default: null },
+    // Stored source code can be large, so it is never returned by normal queries.
+    snapshot: { type: aiSnapshotSchema, select: false },
+  },
+  { _id: false },
+);
 
 const submissionSchema = new mongoose.Schema(
   {
@@ -49,11 +90,19 @@ const submissionSchema = new mongoose.Schema(
       default: null,
     },
     gradedAt: { type: Date, default: null },
+    // AI feedback is only a suggestion. The teacher still saves the real grade.
+    aiDraft: { type: aiDraftSchema, default: undefined },
   },
   { timestamps: true, strict: true },
 );
 
 submissionSchema.index({ assignment: 1, student: 1 }, { unique: true });
 submissionSchema.index({ batch: 1, submittedAt: -1 });
+// Used by the startup recovery scan for unfinished AI drafts.
+submissionSchema.index({
+  "aiDraft.status": 1,
+  "aiDraft.attempts": 1,
+  "aiDraft.requestedAt": 1,
+});
 
 module.exports = mongoose.model("Submission", submissionSchema);

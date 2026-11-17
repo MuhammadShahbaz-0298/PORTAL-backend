@@ -1,5 +1,5 @@
 // Every token and session number lives in this one file.
-// Change a default here, or set the matching environment variable on Railway.
+// Change a default here, or set the matching environment variable on Render.
 
 const AUTH_LIMITS = Object.freeze({
   // How long one access token works. Short on purpose.

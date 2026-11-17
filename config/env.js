@@ -3,6 +3,13 @@
 
 // A JWT secret shorter than this can be brute-forced, so we refuse to start.
 const { readAuthSettings } = require("./auth");
+const {
+  AI_DEFAULT_BASE_URL,
+  AI_DEFAULT_MAX_INPUT_CHARS,
+  AI_DEFAULT_MODEL,
+  AI_MAX_INPUT_CHARS,
+  AI_MIN_INPUT_CHARS,
+} = require("../constants");
 
 const MINIMUM_JWT_SECRET_LENGTH = 64;
 
@@ -107,6 +114,32 @@ function readPort(source, problems) {
   return port;
 }
 
+// AI settings are optional on purpose: a missing or bad value must never stop the server.
+function readAiSettings(source = process.env) {
+  const apiKey = typeof source.AI_API_KEY === "string" ? source.AI_API_KEY.trim() : "";
+  const enabledText =
+    source.AI_ENABLED === undefined ? "true" : String(source.AI_ENABLED).trim().toLowerCase();
+  const enabled = apiKey.length > 0 && enabledText !== "false";
+
+  const rawBaseUrl =
+    typeof source.AI_BASE_URL === "string" ? source.AI_BASE_URL.trim().replace(/\/+$/, "") : "";
+  const baseUrl =
+    rawBaseUrl.startsWith("http://") || rawBaseUrl.startsWith("https://")
+      ? rawBaseUrl
+      : AI_DEFAULT_BASE_URL;
+
+  const rawModel = typeof source.AI_MODEL === "string" ? source.AI_MODEL.trim() : "";
+  const model = rawModel || AI_DEFAULT_MODEL;
+
+  const requestedMaxChars = Number(source.AI_MAX_INPUT_CHARS);
+  const safeMaxChars = Number.isInteger(requestedMaxChars)
+    ? requestedMaxChars
+    : AI_DEFAULT_MAX_INPUT_CHARS;
+  const maxInputChars = Math.min(AI_MAX_INPUT_CHARS, Math.max(AI_MIN_INPUT_CHARS, safeMaxChars));
+
+  return { enabled, apiKey, baseUrl, model, maxInputChars };
+}
+
 // The whole check lives in one function so tests can pass a fake environment.
 function loadEnvironment(source = process.env) {
   const problems = [];
@@ -150,7 +183,8 @@ function loadEnvironment(source = process.env) {
     frontendUrl,
     nodeEnv: source.NODE_ENV || "development",
     auth: authSettings,
+    ai: readAiSettings(source),
   };
 }
 
-module.exports = { loadEnvironment, MINIMUM_JWT_SECRET_LENGTH };
+module.exports = { loadEnvironment, readAiSettings, MINIMUM_JWT_SECRET_LENGTH };

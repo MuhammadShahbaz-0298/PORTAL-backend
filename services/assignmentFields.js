@@ -1,7 +1,11 @@
 // Validation and field mapping for assignments.
 // Kept separate so the service file only contains queries and ownership rules.
 
-const { RESUBMISSION_POLICIES, MAX_FILE_SIZE_MB_LIMIT } = require("../constants");
+const {
+  RESUBMISSION_POLICIES,
+  MAX_FILE_SIZE_MB_LIMIT,
+  ASSIGNMENT_RUBRIC_MAX_LENGTH,
+} = require("../constants");
 const {
   assertArrayOfStrings,
   assertBoolean,
@@ -17,6 +21,7 @@ const CREATE_FIELDS = [
   "batch",
   "title",
   "description",
+  "rubric",
   "dueDate",
   "allowedFileTypes",
   "maxFileSizeMb",
@@ -26,6 +31,7 @@ const CREATE_FIELDS = [
 const UPDATE_FIELDS = [
   "title",
   "description",
+  "rubric",
   "dueDate",
   "allowedFileTypes",
   "maxFileSizeMb",
@@ -61,6 +67,10 @@ function buildCreateFields({ batchId, payload, createdBy }) {
       allowEmpty: true,
       maxLength: 5000,
     }),
+    rubric: assertOptionalString(fields.rubric, "rubric", {
+      allowEmpty: true,
+      maxLength: ASSIGNMENT_RUBRIC_MAX_LENGTH,
+    }),
     dueDate: assertDate(fields.dueDate, "dueDate"),
     allowedFileTypes: validateFileTypes(fields.allowedFileTypes || ["zip"]),
     maxFileSizeMb: assertNumber(fields.maxFileSizeMb ?? 25, "maxFileSizeMb", {
@@ -87,6 +97,13 @@ function applyUpdateFields(assignment, payload) {
     assignment.description = assertOptionalString(fields.description, "description", {
       allowEmpty: true,
       maxLength: 5000,
+    });
+  }
+
+  if (fields.rubric !== undefined) {
+    assignment.rubric = assertOptionalString(fields.rubric, "rubric", {
+      allowEmpty: true,
+      maxLength: ASSIGNMENT_RUBRIC_MAX_LENGTH,
     });
   }
 

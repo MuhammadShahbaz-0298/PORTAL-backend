@@ -39,13 +39,20 @@ async function listSubmissions({ requester, query }) {
 
   const filter = filters.length ? { $and: filters } : {};
   const total = await Submission.countDocuments(filter);
-  const items = await Submission.find(filter)
+  const itemsQuery = Submission.find(filter)
     .populate("assignment", "title dueDate")
     .populate("student", "name email")
     .populate("batch", "name")
     .sort({ submittedAt: -1 })
     .skip(pagination.skip)
     .limit(pagination.limit);
+
+  // Students must never receive AI draft data, even if a field is added later.
+  if (role === ROLES.STUDENT) {
+    itemsQuery.select("-aiDraft");
+  }
+
+  const items = await itemsQuery;
 
   return { items, pagination, total };
 }
@@ -57,12 +64,19 @@ async function gradeSubmission({ requester, submission, payload }) {
     maxLength: 2000,
   });
   const nextStatus = payload.status === "rejected" ? "rejected" : "graded";
+  const savedFeedback = feedback || null;
 
   submission.grade = grade;
-  submission.feedback = feedback || null;
+  submission.feedback = savedFeedback;
   submission.status = nextStatus;
   submission.gradedBy = getUserId(requester);
   submission.gradedAt = new Date();
+
+  // Record whether the teacher used the AI draft as-is or changed it.
+  if (submission.aiDraft && submission.aiDraft.status === "ready") {
+    submission.aiDraft.status = savedFeedback === submission.aiDraft.feedback ? "used" : "edited";
+  }
+
   await submission.save();
 
   return submission;

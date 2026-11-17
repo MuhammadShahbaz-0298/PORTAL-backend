@@ -15,8 +15,14 @@ try {
   process.exit(1);
 }
 
+// One clear line tells the operator why no AI drafts will appear.
+if (!environment.ai.enabled) {
+  console.info("AI drafts are off");
+}
+
 // The app is required after the environment check, because it reads FRONTEND_URL.
 const app = require("./app");
+const aiDraftService = require("./services/aiDraftService");
 let server;
 
 async function startServer() {
@@ -24,6 +30,13 @@ async function startServer() {
   server = app.listen(environment.port, () => {
     console.info(`Server running on port ${environment.port}`);
   });
+
+  // Pick up drafts that were waiting when the server restarted.
+  if (environment.ai.enabled) {
+    aiDraftService.resumePendingDrafts().catch(() => {
+      console.error("AI draft recovery failed.");
+    });
+  }
 }
 
 async function shutdown(signal) {

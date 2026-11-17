@@ -50,8 +50,8 @@ Add it to every non-GET request, including `multipart/form-data` uploads and
 The API only accepts the origin in `FRONTEND_URL`, with
 `Access-Control-Allow-Credentials: true`. Wildcards no longer work.
 
-If the frontend runs on `https://portal.up.railway.app`, set
-`FRONTEND_URL=https://portal.up.railway.app` on the API service (no trailing
+If the frontend runs on `https://portal.onrender.com`, set
+`FRONTEND_URL=https://portal.onrender.com` on the API service (no trailing
 slash, no path).
 
 ## 4. Cross-site cookies in production — deployment impact
@@ -160,7 +160,9 @@ Previously issued tokens are not affected by this doc; new logins are.
   attachment disposition. Fetch it with `credentials: "include"` and use a blob
   URL if the UI needs to control the file name.
 - Archived or expired assignments reject uploads with `410`.
-- If `resubmissionPolicy` is `disabled`, replacement returns `403`.
+- Replacing a `graded` submission returns `409`.
+- If `resubmissionPolicy` is `disabled`, replacing a `submitted` submission
+  returns `409`. A `rejected` submission may always be replaced.
 
 ## 13. Submission status and grade
 
@@ -260,7 +262,14 @@ x-client: mobile
 
 ```json
 {
-  "user": { "id": "...", "name": "...", "email": "...", "role": "student", "active": true, "permissions": [] },
+  "user": {
+    "id": "...",
+    "name": "...",
+    "email": "...",
+    "role": "student",
+    "active": true,
+    "permissions": []
+  },
   "accessToken": "...",
   "refreshToken": "..."
 }
@@ -345,3 +354,48 @@ This is **additive** — existing attendance records without `leaveReason` conti
 Attendance requests may also include `timezoneOffset` (the value from the
 client's `Date.getTimezoneOffset()`) so the backend checks "today" in the
 client's local timezone. If omitted, UTC is used.
+
+## 20. AI feedback drafts (additive)
+
+Teachers and admins may now receive an `aiDraft` object on submission
+responses. It is **optional** and only appears when AI drafts are configured.
+
+```json
+{
+  "status": "ready",
+  "feedback": "A kind, specific suggestion...",
+  "suggestedMarks": 82,
+  "strengths": ["..."],
+  "improvements": ["..."],
+  "model": "llama-3.3-70b-versatile",
+  "attempts": 1,
+  "generations": 1,
+  "error": "",
+  "generatedAt": "...",
+  "requestedAt": "..."
+}
+```
+
+Rules for the frontend:
+
+- **Students never receive `aiDraft`.** Do not expect it on student screens.
+- The source-code `snapshot` is never returned to any role.
+- `suggestedMarks` is only a suggestion. It is never saved as the real `grade`.
+- The teacher should still edit and save the grade/feedback normally.
+- When grading, the server changes a `ready` draft to `used` if the saved
+  feedback exactly matches the draft, otherwise `edited`.
+- New endpoints:
+  - `POST /api/submissions/:id/ai-draft` (regenerate; `submissions.grade`)
+    returns `aiDraft.status: "pending"` and works in the background.
+  - `PATCH /api/submissions/:id/ai-draft/discard` marks the draft `discarded`.
+- A submission has at most **8 lifetime generations**, counting automatic and
+  manual runs. Regenerate after that returns `409`.
+- Replacing a ZIP resets the draft but keeps the lifetime `generations` count.
+- If AI is switched off, the endpoints return `503` and the server still starts
+  normally. The startup log says `AI drafts are off`.
+
+Assignments also accept an optional `rubric` (≤ 5000 chars) on create/update.
+It is sent to the AI as extra marking context.
+
+This change is additive: existing response shapes are unchanged apart from the
+new `aiDraft` field for teachers/admins.

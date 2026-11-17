@@ -1,5 +1,5 @@
 // Simple in-memory login lockout.
-// This is enough for one server. If Railway runs many copies, move this to Redis later.
+// This is enough for one server. If Render runs many copies, move this to Redis later.
 
 const attempts = new Map();
 

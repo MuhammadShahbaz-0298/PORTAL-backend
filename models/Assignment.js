@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const {
   ASSIGNMENT_TITLE_MAX_LENGTH,
   ASSIGNMENT_DESCRIPTION_MAX_LENGTH,
+  ASSIGNMENT_RUBRIC_MAX_LENGTH,
   MAX_FILE_SIZE_MB_LIMIT,
   RESUBMISSION_POLICIES,
 } = require("../constants");
@@ -27,6 +28,12 @@ const assignmentSchema = new mongoose.Schema(
       type: String,
       default: "",
       maxlength: ASSIGNMENT_DESCRIPTION_MAX_LENGTH,
+    },
+    // The teacher's marking guide. The AI uses it as extra context only.
+    rubric: {
+      type: String,
+      default: "",
+      maxlength: ASSIGNMENT_RUBRIC_MAX_LENGTH,
     },
     dueDate: { type: Date, required: true },
     allowedFileTypes: { type: [String], default: ["zip"] },
