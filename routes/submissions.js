@@ -5,6 +5,7 @@ const auth = require("../middleware/auth");
 const requirePermission = require("../middleware/requirePermission");
 const requireRole = require("../middleware/requireRole");
 const requireOwnSubmission = require("../middleware/requireOwnBatch");
+const { ROLES } = require("../constants");
 const uploadZip = require("../middleware/uploadZip");
 const {
   createSubmission,
@@ -14,6 +15,7 @@ const {
   downloadSubmission,
   regenerateAiDraft,
   discardAiDraft,
+  getVersions,
 } = require("../controllers/submissionController");
 
 const router = express.Router();
@@ -23,18 +25,19 @@ router.get("/", requirePermission("submissions.view"), getSubmissions);
 router.post(
   "/",
   requirePermission("submissions.view"),
-  requireRole("student"),
+  requireRole(ROLES.STUDENT),
   uploadZip.single("file"),
   createSubmission,
 );
 router.patch(
   "/:id/file",
   requirePermission("submissions.view"),
-  requireRole("student"),
+  requireRole(ROLES.STUDENT),
   uploadZip.single("file"),
   updateSubmission,
 );
 router.get("/:id/download", requirePermission("submissions.view"), downloadSubmission);
+router.get("/:id/versions", requirePermission("submissions.view"), getVersions);
 router.patch(
   "/:id/grade",
   requirePermission("submissions.grade"),

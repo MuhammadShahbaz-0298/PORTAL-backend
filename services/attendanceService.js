@@ -17,6 +17,7 @@ const {
 } = require("../utils/validation");
 const { getPagination } = require("../utils/pagination");
 const batchAccessService = require("./batchAccessService");
+const guardianService = require("./guardianService");
 
 function startOfDay(value) {
   const date = assertDate(value, "date");
@@ -107,11 +108,12 @@ async function addAttendance({ requester, payload }) {
 
   applyLeaveReason(update, fields, status);
 
-  return Attendance.findOneAndUpdate(
-    { student: studentId, batch: batchId, date },
-    update,
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
-  );
+  return Attendance.findOneAndUpdate({ student: studentId, batch: batchId, date }, update, {
+    upsert: true,
+    new: true,
+    runValidators: true,
+    setDefaultsOnInsert: true,
+  });
 }
 
 async function listAttendance({ requester, query }) {
@@ -148,6 +150,17 @@ async function listAttendance({ requester, query }) {
       throw new AppError("You cannot view another student's attendance.", 403);
     }
     filters.push({ student: getUserId(requester) });
+  }
+
+  if (role === "guardian") {
+    if (studentId) {
+      await guardianService.assertCanViewChild(requester, studentId);
+      filters.push({ student: studentId });
+    } else {
+      const children = await guardianService.getLinkedChildren({ requester });
+      const childIds = children.map((child) => child._id);
+      filters.push({ student: { $in: childIds } });
+    }
   }
 
   const filter = filters.length ? { $and: filters } : {};
@@ -228,6 +241,10 @@ async function getAttendanceSummary({ requester, studentId }) {
 
   if (role === ROLES.STUDENT && studentId !== getUserId(requester)) {
     throw new AppError("You cannot view another student's attendance.", 403);
+  }
+
+  if (role === "guardian") {
+    await guardianService.assertCanViewChild(requester, studentId);
   }
 
   if (role === ROLES.TEACHER) {

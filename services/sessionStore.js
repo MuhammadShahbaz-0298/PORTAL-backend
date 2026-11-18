@@ -64,6 +64,13 @@ async function findSessionByRefreshToken(refreshToken) {
   return Session.findOne({ tokenHash });
 }
 
+async function listSessionsForUser(userId) {
+  return Session.find({ user: userId, revokedAt: null, replacedBy: null })
+    .select("-tokenHash")
+    .sort({ lastActiveAt: -1 })
+    .lean();
+}
+
 async function findSessionById(sessionId) {
   if (!mongoose.isValidObjectId(sessionId)) {
     return null;
@@ -90,5 +97,6 @@ module.exports = {
   createSession,
   findSessionByRefreshToken,
   findSessionById,
+  listSessionsForUser,
   touchSession,
 };

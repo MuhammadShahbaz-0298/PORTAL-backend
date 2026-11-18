@@ -23,6 +23,16 @@ const PERMISSIONS = [
   "users.manage",
   "roles.manage",
   "profile.view",
+  "notifications.view",
+  "announcements.view",
+  "announcements.manage",
+  "comments.view",
+  "comments.create",
+  "guardian.view",
+  "quiz.view",
+  "quiz.manage",
+  "analytics.view",
+  "audit.view",
 ];
 
 const normalizePermissions = (permissions = []) => {
@@ -69,6 +79,12 @@ const TEACHER_PERMISSIONS = [
   "attendance.view",
   "attendance.manage",
   "profile.view",
+  "notifications.view",
+  "announcements.view",
+  "comments.view",
+  "comments.create",
+  "quiz.view",
+  "quiz.manage",
 ];
 
 const ROLE_DEFAULTS = {
@@ -80,7 +96,12 @@ const ROLE_DEFAULTS = {
     "submissions.view",
     "attendance.view",
     "profile.view",
+    "notifications.view",
+    "comments.view",
+    "comments.create",
+    "quiz.view",
   ],
+  guardian: ["dashboard.view", "guardian.view", "notifications.view"],
 };
 
 // The migration script adds these to existing teacher roles so nobody loses access.

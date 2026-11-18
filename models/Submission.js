@@ -71,10 +71,12 @@ const submissionSchema = new mongoose.Schema(
       index: true,
     },
     // Only the random stored file name. Never the user's original path.
-    filePath: { type: String, required: true, maxlength: 255 },
+    // For "link" submissions, filePath may be empty and linkUrl holds the URL.
+    filePath: { type: String, maxlength: 255, default: "" },
+    linkUrl: { type: String, maxlength: 2000, default: null },
     // The original name is shown to the user, but never used as a disk path.
     fileName: { type: String, required: true, maxlength: 255 },
-    fileSize: { type: Number, required: true, min: 1, max: GLOBAL_UPLOAD_MAX_BYTES },
+    fileSize: { type: Number, default: 0, min: 0, max: GLOBAL_UPLOAD_MAX_BYTES },
     mimeType: { type: String, default: "application/zip", maxlength: 100 },
     status: {
       type: String,
@@ -83,6 +85,33 @@ const submissionSchema = new mongoose.Schema(
     },
     grade: { type: String, default: null, maxlength: GRADE_MAX_LENGTH },
     feedback: { type: String, default: null, maxlength: FEEDBACK_MAX_LENGTH },
+    // Structured rubric scores, one per criterion. Total is computed, not stored.
+    rubricScores: {
+      type: [
+        {
+          criterion: { type: String, trim: true, maxlength: 200 },
+          points: { type: Number, min: 0, default: 0 },
+        },
+      ],
+      default: [],
+    },
+    // Similarity flag vs other submissions for the same assignment.
+    similarityFlag: {
+      matchedSubmission: { type: mongoose.Schema.Types.ObjectId, ref: "Submission", default: null },
+      score: { type: Number, min: 0, max: 1, default: null },
+    },
+    // Versioned upload history. Current file is NOT in here; older uploads are.
+    versions: {
+      type: [
+        {
+          filePath: { type: String, maxlength: 255 },
+          fileName: { type: String, maxlength: 255 },
+          fileSize: { type: Number, min: 1 },
+          uploadedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     submittedAt: { type: Date, default: Date.now },
     gradedBy: {
       type: mongoose.Schema.Types.ObjectId,

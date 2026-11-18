@@ -282,10 +282,7 @@ async function collectFileText(zipfile, candidates, limits) {
   const collected = { files: [], truncated: false, totalChars: 0 };
 
   for (const candidate of candidates) {
-    if (
-      collected.files.length >= limits.maxFiles ||
-      collected.totalChars >= limits.maxTotalChars
-    ) {
+    if (collected.files.length >= limits.maxFiles || collected.totalChars >= limits.maxTotalChars) {
       collected.truncated = true;
       break;
     }

@@ -40,11 +40,25 @@ const userSchema = new mongoose.Schema(
     },
     // Extra permissions on top of the role. Only admins may change this.
     permissions: { type: [String], default: [] },
+    // For guardians: the student user ids this guardian is linked to.
+    guardianOf: { type: [mongoose.Schema.Types.ObjectId], ref: "User", default: [] },
     // Set by an admin password reset; cleared after the user changes it.
     mustChangePassword: { type: Boolean, default: false },
     // Soft delete: inactive users stay in the database but cannot log in.
     active: { type: Boolean, default: true },
     archivedAt: { type: Date, default: null },
+    // GDPR deletion request timestamp. Null means no pending request.
+    deletionRequestedAt: { type: Date, default: null },
+    // Self-service password reset token (hashed) and expiry.
+    passwordResetToken: { type: String, select: false, default: null },
+    passwordResetExpires: { type: Date, default: null },
+    // Email verification.
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationToken: { type: String, select: false, default: null },
+    emailVerificationExpires: { type: Date, default: null },
+    // 2FA.
+    twoFactorSecret: { type: String, select: false, default: null },
+    twoFactorEnabled: { type: Boolean, default: false },
   },
   { timestamps: true, strict: true },
 );

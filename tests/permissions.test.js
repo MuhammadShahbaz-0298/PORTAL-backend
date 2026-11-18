@@ -390,7 +390,7 @@ test("student sees own leaveReason in attendance records", async () => {
   await teacherAClient.post("/api/attendance", attendanceBody);
   const result = await studentAClient.get(`/api/attendance/${data.studentA._id}`);
   assert.equal(result.status, 200);
-  const leaveRecord = result.data.records.find(r => r.status === "leave");
+  const leaveRecord = result.data.records.find((r) => r.status === "leave");
   assert.ok(leaveRecord);
   assert.equal(leaveRecord.leaveReason, "Appointment");
 });

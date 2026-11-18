@@ -15,6 +15,7 @@ const {
   pickFields,
 } = require("../utils/validation");
 const { getEffectivePermissions } = require("./permissionService");
+const emailVerificationService = require("./emailVerificationService");
 
 async function toSafeUser(user) {
   return {
@@ -70,6 +71,9 @@ async function registerUser({ actor, payload }) {
   }
 
   const user = await User.create({ name, email, password, role, permissions, active });
+
+  // Best-effort verification email. Never block registration.
+  emailVerificationService.sendVerificationEmail({ userId: user._id }).catch(() => undefined);
 
   return toSafeUser(user);
 }

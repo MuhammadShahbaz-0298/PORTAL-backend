@@ -80,6 +80,14 @@ const downloadSubmission = asyncHandler(async (request, response) => {
   return response.download(download.filePath, download.downloadName);
 });
 
+const getVersions = asyncHandler(async (request, response) => {
+  const versions = await submissionService.getSubmissionVersions({
+    requester: request.user,
+    submissionId: request.params.id,
+  });
+  return response.json(versions);
+});
+
 module.exports = {
   createSubmission,
   updateSubmission,
@@ -88,4 +96,5 @@ module.exports = {
   downloadSubmission,
   regenerateAiDraft,
   discardAiDraft,
+  getVersions,
 };

@@ -3,14 +3,60 @@
 
 const fs = require("fs");
 const Submission = require("../models/Submission");
+const Assignment = require("../models/Assignment");
 const { ROLES } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId, getUserRole, isAdmin } = require("../utils/authorization");
-const { assertGrade, assertObjectId, assertOptionalString } = require("../utils/validation");
+const {
+  assertGrade,
+  assertObjectId,
+  assertOptionalString,
+  assertString,
+  assertNumber,
+} = require("../utils/validation");
 const { resolveUploadPath, sanitizeDisplayFileName } = require("../utils/files");
 const { getPagination } = require("../utils/pagination");
 const batchAccessService = require("./batchAccessService");
+
+// Pure function: computes a late penalty from a policy and two dates.
+// Returns the penalty percentage (0-100). Never hardcodes a percentage.
+function computeLatePenalty(latePolicy, submittedAt, dueDate) {
+  if (!latePolicy || latePolicy.type === "none") {
+    return 0;
+  }
+
+  const submittedDate = submittedAt instanceof Date ? submittedAt : new Date(submittedAt);
+  const dueDateValue = dueDate instanceof Date ? dueDate : new Date(dueDate);
+
+  if (submittedDate <= dueDateValue) {
+    return 0;
+  }
+
+  const graceDays = latePolicy.graceDays || 0;
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const daysLate = Math.ceil(
+    (submittedDate.getTime() - dueDateValue.getTime()) / millisecondsPerDay,
+  );
+
+  if (daysLate <= graceDays) {
+    return 0;
+  }
+
+  const effectiveDaysLate = daysLate - graceDays;
+
+  if (latePolicy.type === "flat") {
+    return latePolicy.flatAmount || 0;
+  }
+
+  if (latePolicy.type === "percentagePerDay") {
+    const percentage = (latePolicy.percentage || 0) * effectiveDaysLate;
+    return Math.min(100, percentage);
+  }
+
+  return 0;
+}
 const uploadService = require("./submissionUploadService");
+const guardianService = require("./guardianService");
 
 async function listSubmissions({ requester, query }) {
   const pagination = getPagination(query);
@@ -26,6 +72,11 @@ async function listSubmissions({ requester, query }) {
 
   if (role === ROLES.STUDENT) {
     filters.push({ student: getUserId(requester) });
+  }
+
+  if (role === "guardian") {
+    const childBatchIds = await guardianService.getGuardianBatchIds(getUserId(requester));
+    filters.push({ batch: { $in: childBatchIds } });
   }
 
   if (role === ROLES.TEACHER) {
@@ -65,6 +116,33 @@ async function gradeSubmission({ requester, submission, payload }) {
   });
   const nextStatus = payload.status === "rejected" ? "rejected" : "graded";
   const savedFeedback = feedback || null;
+
+  // Optional structured rubric scores. Validate against the assignment's max per criterion.
+  if (payload.rubricScores !== undefined) {
+    const scores = Array.isArray(payload.rubricScores) ? payload.rubricScores : [];
+    const assignment = await Assignment.findById(submission.assignment).select("rubricItems");
+    const maxByCriterion = new Map(
+      (assignment?.rubricItems || []).map((item) => [item.criterion, item.maxPoints]),
+    );
+
+    const cleanedScores = [];
+    for (const score of scores) {
+      if (!score || typeof score !== "object") {
+        throw new AppError("Invalid rubric score entry.", 400);
+      }
+      const criterion = assertString(score.criterion, "criterion", { maxLength: 200 });
+      const points = assertNumber(score.points, "points", { min: 0 });
+      const maxPoints = maxByCriterion.get(criterion);
+      if (maxPoints === undefined) {
+        throw new AppError(`Unknown rubric criterion: ${criterion}.`, 400);
+      }
+      if (points > maxPoints) {
+        throw new AppError(`Score for ${criterion} exceeds maximum of ${maxPoints}.`, 400);
+      }
+      cleanedScores.push({ criterion, points });
+    }
+    submission.rubricScores = cleanedScores;
+  }
 
   submission.grade = grade;
   submission.feedback = savedFeedback;
@@ -113,9 +191,34 @@ async function getSubmissionForDownload({ requester, submissionId }) {
   };
 }
 
+async function getSubmissionVersions({ requester, submissionId }) {
+  assertObjectId(submissionId, "submission id");
+  const submission = await Submission.findById(submissionId).populate("batch", "teacher");
+
+  if (!submission) {
+    throw new AppError("Submission not found.", 404);
+  }
+
+  const role = getUserRole(requester);
+  const isOwner = String(submission.student) === getUserId(requester);
+  const ownsBatch = submission.batch && String(submission.batch.teacher) === getUserId(requester);
+  const allowed =
+    isAdmin(requester) ||
+    (role === ROLES.STUDENT && isOwner) ||
+    (role === ROLES.TEACHER && ownsBatch);
+
+  if (!allowed) {
+    throw new AppError("Not authorized to access this file.", 403);
+  }
+
+  return submission.versions || [];
+}
+
 module.exports = {
   ...uploadService,
   listSubmissions,
   gradeSubmission,
   getSubmissionForDownload,
+  getSubmissionVersions,
+  computeLatePenalty,
 };

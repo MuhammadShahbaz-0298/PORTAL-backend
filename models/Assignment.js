@@ -35,6 +35,17 @@ const assignmentSchema = new mongoose.Schema(
       default: "",
       maxlength: ASSIGNMENT_RUBRIC_MAX_LENGTH,
     },
+    // Structured rubric: an array of criteria, each with a max score.
+    // Additive: the old rubric string stays for backward compatibility.
+    rubricItems: {
+      type: [
+        {
+          criterion: { type: String, trim: true, maxlength: 200 },
+          maxPoints: { type: Number, min: 0, default: 0 },
+        },
+      ],
+      default: [],
+    },
     dueDate: { type: Date, required: true },
     allowedFileTypes: { type: [String], default: ["zip"] },
     maxFileSizeMb: {
@@ -48,6 +59,16 @@ const assignmentSchema = new mongoose.Schema(
       enum: RESUBMISSION_POLICIES,
       default: "allowed",
     },
+    latePolicy: {
+      type: {
+        type: String,
+        enum: ["none", "percentagePerDay", "flat"],
+        default: "none",
+      },
+      percentage: { type: Number, min: 0, max: 100, default: 0 },
+      flatAmount: { type: Number, min: 0, default: 0 },
+      graceDays: { type: Number, min: 0, default: 0 },
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -55,6 +76,17 @@ const assignmentSchema = new mongoose.Schema(
     },
     active: { type: Boolean, default: true },
     closedAt: { type: Date, default: null },
+    // Teacher resource attachments.
+    resources: {
+      type: [
+        {
+          fileName: { type: String, maxlength: 255 },
+          filePath: { type: String, maxlength: 255 },
+          uploadedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true, strict: true },
 );

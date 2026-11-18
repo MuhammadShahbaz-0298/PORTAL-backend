@@ -45,11 +45,13 @@ const ZIP_MAX_ENTRIES = 1000;
 const ZIP_MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
 const ZIP_MAX_COMPRESSION_RATIO = 100;
 
-const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze([".zip"]);
+const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze([".zip", ".pdf", ".txt"]);
 const ALLOWED_UPLOAD_MIME_TYPES = Object.freeze([
   "application/zip",
   "application/x-zip-compressed",
   "multipart/x-zip",
+  "application/pdf",
+  "text/plain",
 ]);
 
 // AI feedback drafts. The AI only suggests; a teacher still saves the grade.
@@ -61,6 +63,49 @@ const AI_DRAFT_STATUSES = Object.freeze([
   "edited",
   "discarded",
 ]);
+
+// Notification types. Adding a type here keeps every feature in sync.
+const NOTIFICATION_TYPES = Object.freeze({
+  SUBMISSION_GRADED: "submission.graded",
+  NEW_ASSIGNMENT: "new.assignment",
+  PASSWORD_RESET: "password.reset",
+  AI_DRAFT_READY: "ai.draft.ready",
+  ANNOUNCEMENT: "announcement",
+  RISK_FLAG: "risk.flag",
+  EMAIL_VERIFICATION: "email.verify",
+});
+
+// A notification is either in-app only or also emailed to the recipient.
+const NOTIFICATION_CHANNELS = Object.freeze(["inApp", "email"]);
+
+// Announcement scope: a single batch or the whole school.
+const ANNOUNCEMENT_SCOPES = Object.freeze(["batch", "school"]);
+
+// Guardian read-only permission prefix.
+const GUARDIAN_PERMISSION_PREFIX = "students.view.ownChild";
+
+// Quiz auto-grading default.
+const QUIZ_DEFAULT_SCORE = 0;
+
+// Risk flag thresholds come from env, but the field names live here.
+const RISK_FLAG_STATUSES = Object.freeze(["open", "resolved", "dismissed"]);
+
+// Feature flag states.
+const FEATURE_FLAG_STATUSES = Object.freeze(["enabled", "disabled"]);
+
+// Timetable days of the week.
+const DAYS_OF_WEEK = Object.freeze([
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+]);
+
+// PDF report card template fields come from config, not the code.
+const REPORT_CARD_TEMPLATE_FIELDS = Object.freeze(["schoolName", "logoPath"]);
 const AI_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
 const AI_DEFAULT_MODEL = "openai/gpt-oss-120b";
 const AI_DEFAULT_MAX_INPUT_CHARS = 8000;
@@ -133,4 +178,13 @@ module.exports = {
   AI_RECOVERY_MIN_AGE_MS,
   CSRF_HEADER_NAME,
   CSRF_HEADER_VALUE,
+  NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNELS,
+  ANNOUNCEMENT_SCOPES,
+  GUARDIAN_PERMISSION_PREFIX,
+  QUIZ_DEFAULT_SCORE,
+  RISK_FLAG_STATUSES,
+  FEATURE_FLAG_STATUSES,
+  DAYS_OF_WEEK,
+  REPORT_CARD_TEMPLATE_FIELDS,
 };

@@ -14,6 +14,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { readAuthSettings, readCookieSettings } = require("../config/auth");
 const { clearAuthCookies, getRefreshToken, setAuthCookies } = require("../utils/cookies");
 const { assertObjectId, assertPassword } = require("../utils/validation");
+const { verifyCaptcha } = require("../utils/captcha");
 
 function saveLoginCookies(response, tokens) {
   setAuthCookies(response, tokens, readAuthSettings(), readCookieSettings());
@@ -73,6 +74,13 @@ const register = asyncHandler(async (request, response) => {
 });
 
 const login = asyncHandler(async (request, response) => {
+  const captchaToken = request.body.captchaToken;
+  const captchaOk = await verifyCaptcha(captchaToken);
+
+  if (!captchaOk) {
+    throw new AppError("CAPTCHA verification failed.", 400);
+  }
+
   const result = await authService.loginUser({
     email: request.body.email,
     password: request.body.password,
