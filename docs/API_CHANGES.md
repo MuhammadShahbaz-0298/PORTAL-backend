@@ -399,3 +399,72 @@ It is sent to the AI as extra marking context.
 
 This change is additive: existing response shapes are unchanged apart from the
 new `aiDraft` field for teachers/admins.
+
+## 21. Excel-only imports and exports — breaking
+
+User and batch bulk imports now accept `.xlsx` files only; CSV uploads are
+rejected. User imports read the first worksheet with `name`, `email`,
+`password`, and `role` columns. Batch bulk enrollment reads `studentId`.
+Spreadsheet uploads are limited to 5 MB.
+
+User, attendance, and submission exports now return `.xlsx` workbooks instead
+of CSV text. The user import template is available at
+`GET /api/users/bulk-import/template`.
+
+## 22. Eligible enrollment candidates — additive
+
+`GET /api/batches/:id/eligible-students` requires `batches.enroll` and batch
+ownership. It supports the standard `page`, `limit`, and `search` query fields.
+Admins see active students not yet in the batch. Teachers see unassigned
+students and students in their own batches; students assigned only to another
+teacher are not disclosed.
+
+## 23. Clear notifications — additive
+
+`DELETE /api/notifications` requires `notifications.view`. It deletes only the
+authenticated recipient's notification records and returns `deletedCount`.
+This action permanently clears notifications; it does not affect another
+user's records.
+
+## 24. Permission-gated AI assistant — additive
+
+`POST /api/ai/assistant/ask` remains gated by `assistant.use`. Students receive
+their own submission and attendance context. Other permitted roles can ask
+general portal questions without student-record context.
+
+## 25. Bulk quiz question entry (additive)
+
+Quiz managers can download an Excel example from
+`GET /api/quizzes/questions/template` and preview questions with
+`POST /api/quizzes/questions/import`. Upload the `.xlsx` file as multipart
+field `file` (maximum 5 MB). Its first worksheet needs `question`, `optionA`,
+`optionB`, and `correctOption`; `optionC` through `optionF` are optional.
+`correctOption` is the letter A-F for the correct filled option. The import
+returns validated questions for the quiz draft; it does not create or save a
+quiz. CSV is not accepted.
+
+## 26. Student quiz access and notifications (additive)
+
+Creating a quiz notifies students enrolled in its batch with a link to the quiz.
+The student dashboard also lists active quizzes for their batches. Students can
+read quiz content only for batches they are enrolled in; correct answer indices
+are not included in student responses.
+
+## 27. Batch student removal — additive
+
+`DELETE /api/batches/:id/students/:studentId` requires `batches.enroll` and batch
+ownership. It deactivates the enrollment instead of deleting it, preserving
+historical records and allowing a later re-enrollment to reactivate the same
+enrollment. Removed students lose access to that batch's current content.
+
+## 28. Timed quiz attempts — breaking for quiz creation
+
+New quizzes require `timeLimitMinutes`, a whole number from 1 to 1,440. Students
+start or resume their server-timed attempt through
+`POST /api/quizzes/:id/attempt/start`; answer changes are persisted with
+`PATCH /api/quizzes/:id/attempt`. The existing submit route finalizes the attempt.
+When the deadline has passed, saved answers are submitted automatically on the
+next client save/submit request; late answer payloads are ignored. In-progress
+attempts are excluded from staff results. The
+`POST /api/quizzes/:id/attempt/violation` route records fullscreen/tab exits;
+the third exit submits the saved answers after two warnings.

@@ -5,42 +5,19 @@
 require("dotenv").config();
 
 const mongoose = require("mongoose");
-const User = require("../models/User");
-const Batch = require("../models/Batch");
-const Enrollment = require("../models/Enrollment");
 const Assignment = require("../models/Assignment");
 const Attendance = require("../models/Attendance");
 const roleService = require("../services/roleService");
 const { ROLES } = require("../constants");
 const { assertPassword } = require("../utils/validation");
 const { parseScriptArguments } = require("./cleanHelpers");
+const {
+  findOrCreateUser,
+  findOrCreateBatch,
+  findOrCreateEnrollment,
+} = require("./seedDemoHelpers");
 
 const DEMO_PASSWORD_ENV = "SEED_DEMO_PASSWORD";
-
-async function findOrCreateUser({ name, email, role, password }) {
-  const existingUser = await User.findOne({ email });
-  if (existingUser) {
-    return existingUser;
-  }
-
-  return User.create({ name, email, password, role, active: true });
-}
-
-async function findOrCreateBatch({ name, teacherId }) {
-  return Batch.findOneAndUpdate(
-    { name, teacher: teacherId },
-    { $setOnInsert: { name, teacher: teacherId, active: true } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
-}
-
-async function findOrCreateEnrollment({ studentId, batchId }) {
-  return Enrollment.findOneAndUpdate(
-    { student: studentId, batch: batchId },
-    { $setOnInsert: { student: studentId, batch: batchId } },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
-}
 
 async function main() {
   const options = parseScriptArguments();

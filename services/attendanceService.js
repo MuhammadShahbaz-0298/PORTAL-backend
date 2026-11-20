@@ -7,45 +7,17 @@ const { ATTENDANCE_STATUSES, FEEDBACK_MAX_LENGTH, ROLES } = require("../constant
 const { AppError } = require("../utils/errors");
 const { getUserId, getUserRole } = require("../utils/authorization");
 const {
-  assertDate,
   assertEnum,
   assertNumber,
   assertString,
   assertObjectId,
-  assertOptionalString,
   pickFields,
 } = require("../utils/validation");
-const { getPagination } = require("../utils/pagination");
 const batchAccessService = require("./batchAccessService");
+const attendanceReadService = require("./attendanceReadService");
+const { readAttendanceDate, applyLeaveReason } = require("./attendanceRules");
 
-function startOfDay(value) {
-  const date = assertDate(value, "date");
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function addOneDay(date) {
-  return new Date(date.getTime() + 24 * 60 * 60 * 1000);
-}
-
-// "Today" follows the teacher's clock, so the offset is applied before the check.
-function readAttendanceDate(fields) {
-  const date = startOfDay(fields.date);
-  const timezoneOffset =
-    fields.timezoneOffset === undefined
-      ? 0
-      : assertNumber(fields.timezoneOffset, "timezoneOffset", {
-          min: -840,
-          max: 720,
-          integer: true,
-        });
-  const today = startOfDay(new Date(Date.now() - timezoneOffset * 60 * 1000));
-
-  if (date > today) {
-    throw new AppError("Attendance cannot be marked for a future date.", 400);
-  }
-
-  return date;
-}
+const { startOfDay } = attendanceReadService;
 
 async function assertBatchAvailable(requester, studentId, batchId) {
   await batchAccessService.assertCanManageBatch(requester, batchId);
@@ -57,28 +29,6 @@ async function assertBatchAvailable(requester, studentId, batchId) {
   }
 
   return batch;
-}
-
-function applyLeaveReason(update, fields, status) {
-  if (status === "leave") {
-    const leaveReason = assertString(fields.leaveReason, "leave reason", {
-      maxLength: FEEDBACK_MAX_LENGTH,
-    });
-    if (!leaveReason.trim()) {
-      throw new AppError("leave reason is required.", 400);
-    }
-    update.$set.leaveReason = leaveReason;
-    return;
-  }
-
-  if (
-    fields.leaveReason !== undefined &&
-    fields.leaveReason !== null &&
-    String(fields.leaveReason).trim() !== ""
-  ) {
-    throw new AppError("leave reason is only allowed when status is leave.", 400);
-  }
-  update.$unset = { leaveReason: "" };
 }
 
 async function addAttendance({ requester, payload }) {
@@ -107,59 +57,12 @@ async function addAttendance({ requester, payload }) {
 
   applyLeaveReason(update, fields, status);
 
-  return Attendance.findOneAndUpdate(
-    { student: studentId, batch: batchId, date },
-    update,
-    { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true },
-  );
-}
-
-async function listAttendance({ requester, query }) {
-  const pagination = getPagination(query);
-  const filters = [];
-  const role = getUserRole(requester);
-  const batchId = assertOptionalString(query.batchId, "batchId", { maxLength: 50 });
-  const studentId = assertOptionalString(query.studentId, "studentId", { maxLength: 50 });
-  const dateValue = assertOptionalString(query.date, "date", { maxLength: 50 });
-
-  if (batchId) {
-    filters.push({ batch: assertObjectId(batchId, "batchId") });
-  }
-
-  if (studentId) {
-    filters.push({ student: assertObjectId(studentId, "studentId") });
-  }
-
-  if (dateValue) {
-    const dayStart = startOfDay(dateValue);
-    filters.push({ date: { $gte: dayStart, $lt: addOneDay(dayStart) } });
-  }
-
-  if (role === ROLES.TEACHER) {
-    const ownedBatchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
-    const allowedBatchIds = batchId
-      ? ownedBatchIds.filter((id) => String(id) === batchId)
-      : ownedBatchIds;
-    filters.push({ batch: { $in: allowedBatchIds } });
-  }
-
-  if (role === ROLES.STUDENT) {
-    if (studentId && studentId !== getUserId(requester)) {
-      throw new AppError("You cannot view another student's attendance.", 403);
-    }
-    filters.push({ student: getUserId(requester) });
-  }
-
-  const filter = filters.length ? { $and: filters } : {};
-  const total = await Attendance.countDocuments(filter);
-  const items = await Attendance.find(filter)
-    .populate("student", "name email")
-    .populate("batch", "name")
-    .sort({ date: -1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit);
-
-  return { items, pagination, total };
+  return Attendance.findOneAndUpdate({ student: studentId, batch: batchId, date }, update, {
+    upsert: true,
+    new: true,
+    runValidators: true,
+    setDefaultsOnInsert: true,
+  });
 }
 
 async function updateAttendance({ requester, attendanceId, payload }) {
@@ -221,35 +124,4 @@ async function updateAttendance({ requester, attendanceId, payload }) {
   return attendance;
 }
 
-async function getAttendanceSummary({ requester, studentId }) {
-  assertObjectId(studentId, "student id");
-  const role = getUserRole(requester);
-  const filters = [{ student: studentId }];
-
-  if (role === ROLES.STUDENT && studentId !== getUserId(requester)) {
-    throw new AppError("You cannot view another student's attendance.", 403);
-  }
-
-  if (role === ROLES.TEACHER) {
-    const ownedBatchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
-    filters.push({ batch: { $in: ownedBatchIds } });
-  }
-
-  const records = await Attendance.find({ $and: filters })
-    .populate("student", "name email")
-    .populate("batch", "name")
-    .sort({ date: -1 });
-
-  const presentCount = records.filter((record) => record.status === "present").length;
-  const total = records.length;
-
-  return {
-    studentId,
-    present: presentCount,
-    total,
-    percentage: total ? Math.round((presentCount / total) * 100) : 0,
-    records,
-  };
-}
-
-module.exports = { addAttendance, listAttendance, updateAttendance, getAttendanceSummary };
+module.exports = { addAttendance, updateAttendance, ...attendanceReadService };

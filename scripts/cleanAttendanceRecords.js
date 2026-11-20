@@ -1,3 +1,5 @@
+// Maintenance script for c le an at te nd an ce re co rd s.
+// Validates its inputs before changing application data.
 // Normalizes attendance records and reports duplicate student+batch+day rows.
 
 const Attendance = require("../models/Attendance");

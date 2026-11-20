@@ -1,51 +1,24 @@
 // Upload and replacement rules for submissions.
 // One student has at most one submission per assignment; re-upload replaces it.
 
-const path = require("path");
 const Assignment = require("../models/Assignment");
 const Submission = require("../models/Submission");
 const { MAX_SUBMISSIONS_PER_ASSIGNMENT } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId } = require("../utils/authorization");
 const { assertObjectId } = require("../utils/validation");
-const {
-  isZipFile,
-  removeFile,
-  resolveUploadPath,
-  sanitizeDisplayFileName,
-} = require("../utils/files");
-const { assertArchiveIsSafe } = require("../utils/zip");
+const { removeFile, sanitizeDisplayFileName } = require("../utils/files");
 const batchAccessService = require("./batchAccessService");
 const assignmentService = require("./assignmentService");
 const aiDraftService = require("./aiDraftService");
-
-function requireUploadedFile(file) {
-  if (!file) {
-    throw new AppError("No file uploaded.", 400);
-  }
-
-  return file;
-}
-
-async function validateUploadedFile(file, assignment) {
-  const uploadedFile = requireUploadedFile(file);
-  const maximumBytes = assignment.maxFileSizeMb * 1024 * 1024;
-
-  if (uploadedFile.size > maximumBytes) {
-    throw new AppError(`File exceeds the ${assignment.maxFileSizeMb}MB limit.`, 400);
-  }
-
-  const fileType = path.extname(uploadedFile.originalname).slice(1).toLowerCase();
-  if (fileType !== "zip") {
-    throw new AppError("Only .zip files are allowed.", 400);
-  }
-
-  if (!(await isZipFile(uploadedFile.path))) {
-    throw new AppError("The uploaded file is not a valid ZIP archive.", 400);
-  }
-
-  await assertArchiveIsSafe(uploadedFile.path);
-}
+const {
+  validateUploadedFile,
+  assertCanReplace,
+  applyReplacementFile,
+  saveReplacementSnapshot,
+} = require("./submissionUploadValidation");
+const { checkSimilarity } = require("./submissionSimilarityService");
+const { createLinkSubmission } = require("./submissionLinkService");
 
 async function createSubmission({ requester, assignmentId, file }) {
   assertObjectId(assignmentId, "assignmentId");
@@ -92,49 +65,18 @@ async function createSubmission({ requester, assignmentId, file }) {
       console.error("AI snapshot could not be saved.");
     }
 
+    // Best-effort similarity check against other submissions for the same assignment.
+    try {
+      await checkSimilarity(submission._id);
+    } catch {
+      // Similarity check must never make the upload fail.
+      console.error("Similarity check could not be completed.");
+    }
+
     return submission.populate(["assignment", "batch", "student"]);
   } catch (error) {
     await removeFile(file.path);
     throw error;
-  }
-}
-
-function assertCanReplace(submission, assignment) {
-  if (!assignment.active || assignmentService.isExpired(assignment)) {
-    throw new AppError("This assignment has expired.", 410);
-  }
-
-  // A graded submission is final. A rejected one may always be replaced.
-  if (submission.status === "graded") {
-    throw new AppError("A graded submission cannot be replaced.", 409);
-  }
-
-  // "disabled" only blocks a normal submitted file, not a rejected resubmission.
-  if (assignment.resubmissionPolicy === "disabled" && submission.status === "submitted") {
-    throw new AppError("Resubmissions are disabled for this assignment.", 409);
-  }
-}
-
-function applyReplacementFile(submission, file) {
-  submission.filePath = file.filename;
-  submission.fileName = sanitizeDisplayFileName(file.originalname);
-  submission.fileSize = file.size;
-  submission.mimeType = file.mimetype;
-  submission.status = "submitted";
-  submission.grade = null;
-  submission.feedback = null;
-  submission.gradedBy = null;
-  submission.gradedAt = null;
-  submission.submittedAt = new Date();
-  submission.aiDraft = undefined;
-}
-
-async function saveReplacementSnapshot(submission, file, generations) {
-  try {
-    // Copy the new ZIP text before the request ends, while the file still exists.
-    await aiDraftService.saveSnapshot(submission, file, { generations });
-  } catch {
-    console.error("AI snapshot could not be saved.");
   }
 }
 
@@ -159,13 +101,20 @@ async function updateSubmission({ requester, submissionId, file }) {
     // generations is lifetime data, so keep it even though the draft is reset.
     const generations = submission.aiDraft?.generations || 0;
 
+    // Keep the old file as a version instead of deleting it.
+    if (previousPath) {
+      submission.versions = submission.versions || [];
+      submission.versions.push({
+        filePath: previousPath,
+        fileName: submission.fileName,
+        fileSize: submission.fileSize,
+        uploadedAt: submission.submittedAt || new Date(),
+      });
+    }
+
     applyReplacementFile(submission, file);
     await submission.save();
     await saveReplacementSnapshot(submission, file, generations);
-
-    if (previousPath) {
-      await removeFile(resolveUploadPath(previousPath));
-    }
 
     return submission.populate(["assignment", "batch", "student"]);
   } catch (error) {
@@ -174,4 +123,4 @@ async function updateSubmission({ requester, submissionId, file }) {
   }
 }
 
-module.exports = { createSubmission, updateSubmission };
+module.exports = { createSubmission, updateSubmission, createLinkSubmission };

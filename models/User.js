@@ -45,6 +45,8 @@ const userSchema = new mongoose.Schema(
     // Soft delete: inactive users stay in the database but cannot log in.
     active: { type: Boolean, default: true },
     archivedAt: { type: Date, default: null },
+    // Expo push notification tokens for this user's devices.
+    pushTokens: { type: [String], default: [] },
   },
   { timestamps: true, strict: true },
 );

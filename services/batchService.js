@@ -11,58 +11,8 @@ const { ROLES, BATCH_NAME_MAX_LENGTH } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId, getUserRole } = require("../utils/authorization");
 const { assertObjectId, assertString, pickFields } = require("../utils/validation");
-const { buildSearchFilter } = require("../utils/search");
-const { getPagination } = require("../utils/pagination");
 const batchAccessService = require("./batchAccessService");
-
-async function listBatches({ requester, query }) {
-  const pagination = getPagination(query);
-  const searchFilter = buildSearchFilter(query.search, ["name"]);
-  const filters = [{ active: true }, searchFilter];
-  const role = getUserRole(requester);
-
-  if (role === ROLES.TEACHER) {
-    filters.push({ teacher: getUserId(requester) });
-  }
-
-  if (role === ROLES.STUDENT) {
-    const batchIds = await batchAccessService.getStudentBatchIds(getUserId(requester));
-    filters.push({ _id: { $in: batchIds } });
-  }
-
-  const filter = { $and: filters };
-  const total = await Batch.countDocuments(filter);
-  const batches = await Batch.find(filter)
-    .populate("teacher", "name email")
-    .sort({ name: 1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit);
-
-  const items = [];
-
-  for (const batch of batches) {
-    const value = batch.toObject();
-    value.studentCount = await Enrollment.countDocuments({ batch: value._id });
-    items.push(value);
-  }
-
-  return { items, pagination, total };
-}
-
-async function getBatchStudents({ requester, batchId, query }) {
-  assertObjectId(batchId, "batch id");
-  await batchAccessService.assertCanManageBatch(requester, batchId);
-  const pagination = getPagination(query);
-  const total = await Enrollment.countDocuments({ batch: batchId });
-  const enrollments = await Enrollment.find({ batch: batchId })
-    .populate("student", "name email role active")
-    .sort({ createdAt: 1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit);
-
-  const students = enrollments.map((enrollment) => enrollment.student).filter(Boolean);
-  return { items: students, pagination, total };
-}
+const batchReadService = require("./batchReadService");
 
 async function resolveTeacherId(requester, teacherId) {
   const role = getUserRole(requester);
@@ -148,37 +98,10 @@ async function deleteBatch({ requester, batchId }) {
   return { message: "Batch deleted permanently." };
 }
 
-async function enrollStudent({ requester, batchId, payload }) {
-  assertObjectId(batchId, "batch id");
-  await batchAccessService.assertCanManageBatch(requester, batchId);
-  const studentId = assertObjectId(payload.studentId, "student id");
-  const batch = await Batch.findOne({ _id: batchId, active: true });
-
-  if (!batch) {
-    throw new AppError("Batch not found.", 404);
-  }
-
-  const student = await User.findOne({ _id: studentId, role: ROLES.STUDENT, active: true });
-  if (!student) {
-    throw new AppError("Student not found.", 404);
-  }
-
-  // A student may belong to several batches. We do not delete other enrollments.
-  const enrollment = await Enrollment.findOneAndUpdate(
-    { student: studentId, batch: batchId },
-    { student: studentId, batch: batchId },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
-
-  return enrollment;
-}
-
 module.exports = {
-  listBatches,
-  getBatchStudents,
   createBatch,
   updateBatch,
   archiveBatch,
   deleteBatch,
-  enrollStudent,
+  ...batchReadService,
 };

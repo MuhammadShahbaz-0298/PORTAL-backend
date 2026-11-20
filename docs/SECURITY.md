@@ -12,6 +12,14 @@ the limits you still need to handle when deploying.
   distinct characters.
 - `MONGO_URI` must be a `mongodb://` or `mongodb+srv://` URI.
 - `FRONTEND_URL` must be a full `http://` or `https://` URL.
+- `ASSIGNMENT_RESOURCE_DIR` must be an absolute or relative path that resolves
+  outside any public folder.
+- `MAX_ASSIGNMENT_RESOURCES` must be a positive integer.
+- `MAX_ASSIGNMENT_RESOURCE_MB` must be a positive integer.
+- `ALLOWED_RESOURCE_EXTENSIONS` is a comma-separated list of allowed file extensions.
+- `ALLOWED_RESOURCE_MIME_TYPES` is a comma-separated list of allowed MIME types.
+- `PUBLIC_FEATURE_FLAGS` is a comma-separated list of flag keys allowed on the
+  public endpoint.
 - Auth lifetimes are validated: the access token may not outlive the idle
   timeout, and the session cap may not be shorter than the idle timeout.
 - `.env` and `.env.*` are git-ignored, except `.env.example`. The example file
@@ -180,24 +188,25 @@ See `docs/DATABASE.md`.
 
 ## 11. Residual risks and next steps
 
-| Risk                                            | Mitigation now                                      | Next step                                                                    |
-| ----------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Login lockout is per process                    | In-memory map                                       | Move to Redis if you run more than one replica.                              |
-| No password reset flow                          | Admin can set a password via `PATCH /api/users/:id` | Add a signed, single-use reset token with email delivery.                    |
-| No email verification                           | Email is validated syntactically                    | Add verification if accounts are self-service.                               |
-| No 2FA                                          | Not implemented                                     | Add TOTP for admins first.                                                   |
-| Tokens valid until expiry after secret rotation | Standard JWT behavior                               | Rotate by revoking all sessions, then change `JWT_SECRET`.                   |
-| Third-party cookie blocking                     | Cross-site cookie warning                           | Serve frontend and API from one parent domain.                               |
-| Ephemeral uploads on Render                     | Configurable `UPLOAD_DIR`                           | Mount a volume or use S3-compatible storage.                                 |
-| No malware scan                                 | ZIP structure checks only                           | Scan uploads with ClamAV or an object-storage scanner before staff download. |
-| No audit trail for reads                        | Security events cover auth only                     | Add an append-only audit collection if required by policy.                   |
-| In-process rate limiting for all routes         | Login only                                          | Add a general IP rate limit at the proxy (Render/Cloudflare).                |
+| Risk                                            | Mitigation now                  | Next step                                                               |
+| ----------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| Login lockout is per process                    | In-memory map                   | Move to Redis if you run more than one replica.                         |
+| Tokens valid until expiry after secret rotation | Standard JWT behavior           | Rotate by revoking all sessions, then change `JWT_SECRET`.              |
+| Third-party cookie blocking                     | Cross-site cookie warning       | Serve frontend and API from one parent domain.                          |
+| Ephemeral uploads on Render                     | Configurable `UPLOAD_DIR`       | Mount a volume or use S3-compatible storage.                            |
+| No malware scan                                 | ZIP structure checks only       | Add a separate approved malware-scanning service before staff download. |
+| No audit trail for reads                        | Security events cover auth only | Add an append-only audit collection if required by policy.              |
+| In-process rate limiting for all routes         | Login only                      | Add a general IP rate limit at the proxy (Render/Cloudflare).           |
 
 ## 12. Security checklist before deploy
 
 - [ ] `JWT_SECRET` generated with `crypto.randomBytes(64)`, stored only in Render variables.
 - [ ] `NODE_ENV=production`.
 - [ ] `FRONTEND_URL` is the exact HTTPS origin.
+- [ ] `ASSIGNMENT_RESOURCE_DIR` points at a persistent volume outside public folder.
+- [ ] `MAX_ASSIGNMENT_RESOURCES` and `MAX_ASSIGNMENT_RESOURCE_MB` are set to safe values.
+- [ ] `ALLOWED_RESOURCE_EXTENSIONS` and `ALLOWED_RESOURCE_MIME_TYPES` are configured.
+- [ ] `PUBLIC_FEATURE_FLAGS` is set with allowed flag keys.
 - [ ] Both services are HTTPS.
 - [ ] `UPLOAD_DIR` points at a persistent volume, or uploads are moved to object storage.
 - [ ] `mongodump` backup taken before any `--apply` data script.

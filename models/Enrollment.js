@@ -17,6 +17,8 @@ const enrollmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    active: { type: Boolean, default: true },
+    removedAt: { type: Date, default: null },
   },
   { timestamps: true, strict: true },
 );

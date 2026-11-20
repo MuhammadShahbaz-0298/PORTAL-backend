@@ -101,7 +101,9 @@ Common codes:
 ### Limits
 
 - JSON body: 1 MB.
-- Upload: `.zip` only, hard cap 50 MB, per-assignment `maxFileSizeMb` up to 250.
+- Assignment upload: `.zip` only, hard cap 50 MB, per-assignment
+  `maxFileSizeMb` up to 250.
+- Spreadsheet import: `.xlsx` only, maximum 5 MB.
 - One submission per student per assignment. Re-upload replaces the existing one.
 
 ---
@@ -308,6 +310,24 @@ Soft delete only:
 
 The document is **not** removed. Attendance, submissions and history stay valid.
 
+### `GET /api/users/bulk-import/template`
+
+Permission: `users.manage`.
+
+Downloads an `.xlsx` template. Fill the `Users` worksheet; its first row must
+contain `name`, `email`, `password`, and `role`.
+
+### `POST /api/users/bulk-import`
+
+Permission: `users.manage`. Multipart field: `file` (`.xlsx`, maximum 5 MB).
+
+Reads the first worksheet and returns a per-row import report. The workbook
+template includes a separate `Example` worksheet that is not imported.
+
+### `GET /api/users/export`
+
+Permission: `users.manage`. Downloads the visible user data as `users.xlsx`.
+
 ---
 
 ## Batches
@@ -374,11 +394,34 @@ Permission: `batches.enroll`. Admin, or the owning teacher.
 A student may be enrolled in **multiple batches**. Other enrollments are never
 removed.
 
+### `DELETE /api/batches/:id/students/:studentId`
+
+Permission: `batches.enroll` plus ownership (admin or owning teacher).
+
+Soft-removes one student from the batch. The enrollment record and historical
+work remain; the student loses active batch access and becomes eligible for
+re-enrollment. Re-enrolling reactivates the existing enrollment record.
+
 ### `GET /api/batches/:id/students`
 
 Permission: `batches.view` plus ownership (admin or owning teacher).
 
 Returns an array of student documents with `page`/`limit` and the paging headers.
+
+### `GET /api/batches/:id/eligible-students`
+
+Permission: `batches.enroll` plus ownership (admin or owning teacher).
+
+Query: `page`, `limit`, `search`.
+
+Returns active students who are not already enrolled in this batch. Teachers see
+unassigned students and students in their own batches; students assigned only to
+another teacher are not exposed.
+
+### `POST /api/batches/:id/bulk-enroll`
+
+Permission: `batches.enroll` plus ownership. Multipart field: `file` (`.xlsx`,
+maximum 5 MB). The first worksheet must contain a `studentId` column.
 
 ---
 
@@ -650,6 +693,34 @@ Statuses: `pending`, `ready`, `failed`, `used`, `edited`, `discarded`.
 
 ---
 
+## Excel exports
+
+Each route returns an `.xlsx` workbook with the
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` content type:
+
+- `GET /api/attendance/export` — permission: `attendance.export`.
+- `GET /api/submissions/export` — permission: `submissions.export`.
+- `GET /api/users/export` — permission: `users.manage`.
+
+## Notifications
+
+All routes require `notifications.view` and operate only on the authenticated
+recipient's records.
+
+- `GET /api/notifications` returns the notification list.
+- `PATCH /api/notifications/:id/read` marks one notification read.
+- `DELETE /api/notifications` permanently clears that user's notifications and
+  returns `{ "deletedCount": 0 }` when there was nothing to clear.
+
+## AI assistant
+
+`POST /api/ai/assistant/ask` requires `assistant.use` and accepts
+`{ "question": "..." }`. Students receive context from their own submissions
+and attendance. Other permitted roles can ask general portal questions; their
+requests do not include student records.
+
+---
+
 ## Permissions (admin)
 
 All routes require `roles.manage` (admin by default).
@@ -731,3 +802,62 @@ Accepts `label`, `permissions`, `active`. Core roles (`admin`, `teacher`,
 | `users.manage`        | Update/archive any user.                                |
 | `roles.manage`        | Roles and per-user permissions.                         |
 | `profile.view`        | Profile screens.                                        |
+
+## Quiz question workbooks
+
+### `GET /api/quizzes/questions/template`
+
+Requires `quiz.manage`. Downloads `quiz-questions-template.xlsx`, which includes
+a blank `Questions` worksheet, completed examples, and import instructions.
+
+### `POST /api/quizzes/questions/import`
+
+Requires `quiz.manage`. Upload one multipart field named `file` containing an
+`.xlsx` workbook (maximum 5 MB). The first worksheet must contain `question`,
+`optionA`, `optionB`, and `correctOption` columns. `optionC` through `optionF`
+are optional; options must be filled in order. `correctOption` is a letter from
+A to F that points to a filled option. Each row becomes an editable question
+preview; importing does not create a quiz.
+
+`200` returns `{ "questions": [{ "text": "...", "options": ["..."], "correctIndex": 0 }] }`.
+Invalid workbook contents return `400`; students cannot use either workbook
+endpoint.
+
+Creating a quiz sends an in-app notification to students enrolled in its batch.
+The notification links to the quiz. Students can read or submit a quiz only when
+enrolled in its batch; the quiz response does not include correct answer indices.
+
+## Quiz attempts
+
+### `POST /api/quizzes`
+
+Permission: `quiz.manage`. The JSON body includes `title`, `batchId`,
+`timeLimitMinutes` (whole minutes from 1 to 1,440), and `questions`.
+
+### `POST /api/quizzes/:id/attempt/start`
+
+Permission: `quiz.view`; student only, with an active enrollment in the quiz
+batch. Creates or resumes the student's single attempt. The server records its
+start time and deadline; refreshing does not restart the timer.
+
+### `PATCH /api/quizzes/:id/attempt`
+
+Permission: `quiz.view`; saves the in-progress answers in question order.
+Unanswered questions use `-1`. Once the deadline passes, the server submits the
+answers already saved.
+
+### `POST /api/quizzes/:id/attempt`
+
+Permission: `quiz.view`; submits an in-progress attempt. At or after the
+deadline, the server ignores later answers and scores the last saved answers.
+Unanswered questions are scored as incorrect.
+
+### `POST /api/quizzes/:id/attempt/violation`
+
+Permission: `quiz.view`; student only. Records leaving fullscreen or switching
+tabs during an in-progress attempt. The first two violations return the attempt
+with an updated `focusViolationCount`; the third violation submits the saved
+answers automatically.
+
+`GET /api/quizzes/:id/attempts` lists submitted attempts; in-progress attempts
+are not included in staff results.

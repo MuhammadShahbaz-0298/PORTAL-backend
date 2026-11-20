@@ -1,3 +1,5 @@
+// Maintenance script for c le an su bm is si on re co rd s.
+// Validates its inputs before changing application data.
 // Normalizes submission records and reports duplicate student+assignment rows.
 
 const Submission = require("../models/Submission");

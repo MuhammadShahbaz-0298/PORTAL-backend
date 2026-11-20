@@ -4,7 +4,7 @@
 const Role = require("../models/Role");
 const User = require("../models/User");
 const { ROLES, ROLE_NAME_MAX_LENGTH } = require("../constants");
-const { PERMISSIONS, ROLE_DEFAULTS } = require("../config/permissions");
+const { PERMISSIONS, PERMISSION_META, ROLE_DEFAULTS } = require("../config/permissions");
 const { AppError } = require("../utils/errors");
 const {
   assertArrayOfStrings,
@@ -42,10 +42,39 @@ async function ensureCoreRoles() {
   }
 }
 
+// Adds any missing default permission to each core role without removing
+// permissions an admin deliberately took away. Safe to run on every startup.
+async function syncCoreRoles() {
+  await ensureCoreRoles();
+  let changedRoles = 0;
+
+  for (const coreRole of CORE_ROLES) {
+    const role = await Role.findOne({ name: coreRole.name });
+    if (!role) {
+      continue;
+    }
+
+    const current = new Set(role.permissions || []);
+    const missing = (ROLE_DEFAULTS[coreRole.name] || []).filter(
+      (permission) => !current.has(permission),
+    );
+
+    if (missing.length === 0) {
+      continue;
+    }
+
+    await Role.updateOne({ _id: role._id }, { $addToSet: { permissions: { $each: missing } } });
+    changedRoles += 1;
+  }
+
+  console.info(`Core role permission sync: ${changedRoles} role(s) updated.`);
+  return changedRoles;
+}
+
 async function listRoles() {
   await ensureCoreRoles();
   const roles = await Role.find({ active: true }).sort({ name: 1 }).lean();
-  return { roles, permissions: PERMISSIONS };
+  return { roles, permissions: PERMISSIONS, permissionMeta: PERMISSION_META };
 }
 
 async function createRole({ payload }) {
@@ -109,6 +138,7 @@ async function deleteRole({ roleId }) {
 
 module.exports = {
   ensureCoreRoles,
+  syncCoreRoles,
   listRoles,
   createRole,
   updateRole,

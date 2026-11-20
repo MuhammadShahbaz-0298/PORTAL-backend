@@ -1,3 +1,5 @@
+// Tests for a ic on fi g.t es t.
+// Verifies observable behavior without depending on test order.
 // Tests that optional AI settings never stop the server from starting.
 
 const assert = require("node:assert/strict");

@@ -1,6 +1,9 @@
 // Fixed values used across the app.
 // If a word, status, limit or size is used in more than one file, it belongs here.
 
+const AI_CONSTANTS = require("./ai");
+const FEATURE_CONSTANTS = require("./features");
+
 const ROLES = Object.freeze({
   ADMIN: "admin",
   TEACHER: "teacher",
@@ -45,11 +48,13 @@ const ZIP_MAX_ENTRIES = 1000;
 const ZIP_MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
 const ZIP_MAX_COMPRESSION_RATIO = 100;
 
-const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze([".zip"]);
+const ALLOWED_UPLOAD_EXTENSIONS = Object.freeze([".zip", ".pdf", ".txt"]);
 const ALLOWED_UPLOAD_MIME_TYPES = Object.freeze([
   "application/zip",
   "application/x-zip-compressed",
   "multipart/x-zip",
+  "application/pdf",
+  "text/plain",
 ]);
 
 // AI feedback drafts. The AI only suggests; a teacher still saves the grade.
@@ -61,30 +66,14 @@ const AI_DRAFT_STATUSES = Object.freeze([
   "edited",
   "discarded",
 ]);
-const AI_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
-const AI_DEFAULT_MODEL = "openai/gpt-oss-120b";
-const AI_DEFAULT_MAX_INPUT_CHARS = 8000;
-const AI_MIN_INPUT_CHARS = 2000;
-const AI_MAX_INPUT_CHARS = 30000;
-const AI_MAX_FILES = 40;
-const AI_MAX_FILE_BYTES = 30 * 1024;
-const AI_FEEDBACK_MAX_LENGTH = 1800;
-const AI_FEEDBACK_ITEMS_MAX = 10;
-const AI_FEEDBACK_ITEM_MAX_LENGTH = 300;
-const AI_ERROR_MAX_LENGTH = 200;
-const AI_MAX_ATTEMPTS = 4;
-const AI_MAX_GENERATIONS = 8;
-const AI_MAX_CONCURRENT_DRAFTS = 2;
-const AI_REQUEST_TIMEOUT_MS = 60 * 1000;
-const AI_RATE_LIMIT_MAX_WAIT_MS = 90 * 1000;
-const AI_OTHER_ERROR_WAIT_MS = 30 * 1000;
-const AI_RECOVERY_MIN_AGE_MS = 2 * 60 * 1000;
 
 // Every unsafe request must send this header. It is a simple CSRF guard.
 const CSRF_HEADER_NAME = "x-csrf-protection";
 const CSRF_HEADER_VALUE = "1";
 
 module.exports = {
+  ...AI_CONSTANTS,
+  ...FEATURE_CONSTANTS,
   ROLES,
   ATTENDANCE_STATUSES,
   SUBMISSION_STATUSES,
@@ -113,24 +102,6 @@ module.exports = {
   ALLOWED_UPLOAD_EXTENSIONS,
   ALLOWED_UPLOAD_MIME_TYPES,
   AI_DRAFT_STATUSES,
-  AI_DEFAULT_BASE_URL,
-  AI_DEFAULT_MODEL,
-  AI_DEFAULT_MAX_INPUT_CHARS,
-  AI_MIN_INPUT_CHARS,
-  AI_MAX_INPUT_CHARS,
-  AI_MAX_FILES,
-  AI_MAX_FILE_BYTES,
-  AI_FEEDBACK_MAX_LENGTH,
-  AI_FEEDBACK_ITEMS_MAX,
-  AI_FEEDBACK_ITEM_MAX_LENGTH,
-  AI_ERROR_MAX_LENGTH,
-  AI_MAX_ATTEMPTS,
-  AI_MAX_GENERATIONS,
-  AI_MAX_CONCURRENT_DRAFTS,
-  AI_REQUEST_TIMEOUT_MS,
-  AI_RATE_LIMIT_MAX_WAIT_MS,
-  AI_OTHER_ERROR_WAIT_MS,
-  AI_RECOVERY_MIN_AGE_MS,
   CSRF_HEADER_NAME,
   CSRF_HEADER_VALUE,
 };

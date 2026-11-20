@@ -1,61 +1,18 @@
 // Reading, grading and downloading submissions.
 // Upload and replacement rules live in submissionUploadService.js.
 
-const fs = require("fs");
-const Submission = require("../models/Submission");
-const { ROLES } = require("../constants");
+const Assignment = require("../models/Assignment");
 const { AppError } = require("../utils/errors");
-const { getUserId, getUserRole, isAdmin } = require("../utils/authorization");
-const { assertGrade, assertObjectId, assertOptionalString } = require("../utils/validation");
-const { resolveUploadPath, sanitizeDisplayFileName } = require("../utils/files");
-const { getPagination } = require("../utils/pagination");
-const batchAccessService = require("./batchAccessService");
+const { getUserId } = require("../utils/authorization");
+const {
+  assertGrade,
+  assertOptionalString,
+  assertString,
+  assertNumber,
+} = require("../utils/validation");
+
 const uploadService = require("./submissionUploadService");
-
-async function listSubmissions({ requester, query }) {
-  const pagination = getPagination(query);
-  const filters = [];
-  const role = getUserRole(requester);
-  const assignmentId = assertOptionalString(query.assignmentId, "assignmentId", {
-    maxLength: 50,
-  });
-
-  if (assignmentId) {
-    filters.push({ assignment: assertObjectId(assignmentId, "assignmentId") });
-  }
-
-  if (role === ROLES.STUDENT) {
-    filters.push({ student: getUserId(requester) });
-  }
-
-  if (role === ROLES.TEACHER) {
-    const batchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
-    filters.push({ batch: { $in: batchIds } });
-  }
-
-  if (![ROLES.ADMIN, ROLES.TEACHER, ROLES.STUDENT].includes(role)) {
-    filters.push({ _id: null });
-  }
-
-  const filter = filters.length ? { $and: filters } : {};
-  const total = await Submission.countDocuments(filter);
-  const itemsQuery = Submission.find(filter)
-    .populate("assignment", "title dueDate")
-    .populate("student", "name email")
-    .populate("batch", "name")
-    .sort({ submittedAt: -1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit);
-
-  // Students must never receive AI draft data, even if a field is added later.
-  if (role === ROLES.STUDENT) {
-    itemsQuery.select("-aiDraft");
-  }
-
-  const items = await itemsQuery;
-
-  return { items, pagination, total };
-}
+const submissionReadService = require("./submissionReadService");
 
 async function gradeSubmission({ requester, submission, payload }) {
   const grade = assertGrade(payload.grade);
@@ -65,6 +22,33 @@ async function gradeSubmission({ requester, submission, payload }) {
   });
   const nextStatus = payload.status === "rejected" ? "rejected" : "graded";
   const savedFeedback = feedback || null;
+
+  // Optional structured rubric scores. Validate against the assignment's max per criterion.
+  if (payload.rubricScores !== undefined) {
+    const scores = Array.isArray(payload.rubricScores) ? payload.rubricScores : [];
+    const assignment = await Assignment.findById(submission.assignment).select("rubricItems");
+    const maxByCriterion = new Map(
+      (assignment?.rubricItems || []).map((item) => [item.criterion, item.maxPoints]),
+    );
+
+    const cleanedScores = [];
+    for (const score of scores) {
+      if (!score || typeof score !== "object") {
+        throw new AppError("Invalid rubric score entry.", 400);
+      }
+      const criterion = assertString(score.criterion, "criterion", { maxLength: 200 });
+      const points = assertNumber(score.points, "points", { min: 0 });
+      const maxPoints = maxByCriterion.get(criterion);
+      if (maxPoints === undefined) {
+        throw new AppError(`Unknown rubric criterion: ${criterion}.`, 400);
+      }
+      if (points > maxPoints) {
+        throw new AppError(`Score for ${criterion} exceeds maximum of ${maxPoints}.`, 400);
+      }
+      cleanedScores.push({ criterion, points });
+    }
+    submission.rubricScores = cleanedScores;
+  }
 
   submission.grade = grade;
   submission.feedback = savedFeedback;
@@ -82,40 +66,8 @@ async function gradeSubmission({ requester, submission, payload }) {
   return submission;
 }
 
-async function getSubmissionForDownload({ requester, submissionId }) {
-  assertObjectId(submissionId, "submission id");
-  const submission = await Submission.findById(submissionId).populate("batch", "teacher");
-
-  if (!submission) {
-    throw new AppError("Submission not found.", 404);
-  }
-
-  const role = getUserRole(requester);
-  const isOwner = String(submission.student) === getUserId(requester);
-  const ownsBatch = submission.batch && String(submission.batch.teacher) === getUserId(requester);
-  const allowed =
-    isAdmin(requester) ||
-    (role === ROLES.STUDENT && isOwner) ||
-    (role === ROLES.TEACHER && ownsBatch);
-
-  if (!allowed) {
-    throw new AppError("Not authorized to access this file.", 403);
-  }
-
-  const filePath = resolveUploadPath(submission.filePath);
-  if (!fs.existsSync(filePath)) {
-    throw new AppError("Submission file is no longer available.", 404);
-  }
-
-  return {
-    filePath,
-    downloadName: sanitizeDisplayFileName(submission.fileName),
-  };
-}
-
 module.exports = {
   ...uploadService,
-  listSubmissions,
   gradeSubmission,
-  getSubmissionForDownload,
+  ...submissionReadService,
 };

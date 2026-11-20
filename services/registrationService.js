@@ -70,7 +70,6 @@ async function registerUser({ actor, payload }) {
   }
 
   const user = await User.create({ name, email, password, role, permissions, active });
-
   return toSafeUser(user);
 }
 

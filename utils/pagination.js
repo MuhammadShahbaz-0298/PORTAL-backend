@@ -1,3 +1,5 @@
+// Shared utility for p ag in at io n.
+// Provides reusable behavior across application features.
 // Every list endpoint reads page and limit in exactly the same way.
 
 const { AppError } = require("./errors");

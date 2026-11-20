@@ -1,3 +1,5 @@
+// HTTP controller for a tt en da nc ec on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for attendance.
 
 const attendanceService = require("../services/attendanceService");

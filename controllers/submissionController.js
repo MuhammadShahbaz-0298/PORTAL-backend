@@ -1,3 +1,5 @@
+// HTTP controller for s ub mi ss io nc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for submissions, grading, downloads and AI drafts.
 
 const submissionService = require("../services/submissionService");
@@ -80,6 +82,14 @@ const downloadSubmission = asyncHandler(async (request, response) => {
   return response.download(download.filePath, download.downloadName);
 });
 
+const getVersions = asyncHandler(async (request, response) => {
+  const versions = await submissionService.getSubmissionVersions({
+    requester: request.user,
+    submissionId: request.params.id,
+  });
+  return response.json(versions);
+});
+
 module.exports = {
   createSubmission,
   updateSubmission,
@@ -88,4 +98,5 @@ module.exports = {
   downloadSubmission,
   regenerateAiDraft,
   discardAiDraft,
+  getVersions,
 };

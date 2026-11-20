@@ -1,3 +1,5 @@
+// HTTP routes for r ol es.
+// Applies authentication and permissions before controllers run.
 // Routes for roles.
 
 const express = require("express");

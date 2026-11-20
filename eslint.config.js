@@ -1,3 +1,5 @@
+// Configuration for e sl in t.c on fi g.
+// Keeps project tooling behavior consistent.
 // Shared lint rules. Keep them small and obvious so new files do not need tuning.
 const js = require("@eslint/js");
 const globals = require("globals");

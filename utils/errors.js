@@ -1,3 +1,5 @@
+// Shared utility for e rr or s.
+// Provides reusable behavior across application features.
 // One error class and small helpers for turning database errors into HTTP errors.
 
 class AppError extends Error {

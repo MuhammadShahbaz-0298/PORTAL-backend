@@ -1,3 +1,5 @@
+// HTTP routes for a tt en da nc e.
+// Applies authentication and permissions before controllers run.
 // Routes for attendance. Teachers only see their own batches; students only themselves.
 
 const express = require("express");

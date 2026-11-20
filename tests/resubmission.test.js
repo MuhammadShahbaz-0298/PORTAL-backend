@@ -1,3 +1,5 @@
+// Tests for r es ub mi ss io n.t es t.
+// Verifies observable behavior without depending on test order.
 // Tests for the assignment resubmission policy and graded/rejected rules.
 
 const assert = require("node:assert/strict");

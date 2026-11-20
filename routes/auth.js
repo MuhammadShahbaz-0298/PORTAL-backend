@@ -1,3 +1,5 @@
+// HTTP routes for a ut h.
+// Applies authentication and permissions before controllers run.
 // Routes for authentication. Login and refresh are public, everything else needs a session.
 
 const express = require("express");

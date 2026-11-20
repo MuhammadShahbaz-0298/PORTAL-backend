@@ -1,3 +1,5 @@
+// Tests for u ti ls.t es t.
+// Verifies observable behavior without depending on test order.
 // Tests for the shared input helpers and error mapping.
 
 const assert = require("node:assert/strict");
