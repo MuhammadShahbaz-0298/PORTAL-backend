@@ -1,3 +1,5 @@
+// HTTP controller for a ss ig nm en tc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for assignments.
 
 const assignmentService = require("../services/assignmentService");

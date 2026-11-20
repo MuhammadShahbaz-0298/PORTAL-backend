@@ -1,3 +1,5 @@
+// HTTP routes for a na ly ti cs.
+// Applies authentication and permissions before controllers run.
 // Routes for analytics. Read-only, restricted to analytics.view permission.
 
 const express = require("express");

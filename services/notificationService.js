@@ -1,60 +1,25 @@
 // Database work and creation helpers for notifications.
-// A notification is created for one recipient and may also be emailed.
+// A notification is created for one recipient.
 
 const Notification = require("../models/Notification");
-const { NOTIFICATION_TYPES } = require("../constants");
+const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { assertObjectId, assertString, assertEnum } = require("../utils/validation");
-const { sendMail } = require("../utils/mailer");
-const { logSecurityEvent } = require("../utils/securityLog");
 
 // Creates one notification. Used by every trigger below so the logic stays in one place.
 async function createNotification({ recipientId, type, message, channel = "inApp", link }) {
   assertObjectId(recipientId, "recipient id");
   assertEnum(type, Object.values(NOTIFICATION_TYPES), "type");
   assertString(message, "message", { maxLength: 2000 });
+  assertEnum(channel, NOTIFICATION_CHANNELS, "channel");
 
-  const notification = await Notification.create({
+  return Notification.create({
     recipient: recipientId,
     type,
     message,
     channel,
     link: link || undefined,
   });
-
-  // Email is best-effort: a mail failure must never block the in-app notification.
-  if (channel === "email") {
-    try {
-      await sendMail({
-        to: String(recipientId),
-        subject: notificationTypeSubject(type),
-        text: message,
-      });
-      notification.emailSent = true;
-      await notification.save();
-    } catch (error) {
-      if (error.code === "EMAIL_NOT_CONFIGURED") {
-        logSecurityEvent("email_not_configured", { type, recipientId });
-      } else {
-        logSecurityEvent("email_send_failed", { type, recipientId });
-      }
-    }
-  }
-
-  return notification;
-}
-
-function notificationTypeSubject(type) {
-  const subjects = {
-    [NOTIFICATION_TYPES.SUBMISSION_GRADED]: "Your submission has been graded",
-    [NOTIFICATION_TYPES.NEW_ASSIGNMENT]: "New assignment posted",
-    [NOTIFICATION_TYPES.PASSWORD_RESET]: "Your password was reset",
-    [NOTIFICATION_TYPES.AI_DRAFT_READY]: "AI feedback draft is ready",
-    [NOTIFICATION_TYPES.ANNOUNCEMENT]: "New announcement",
-    [NOTIFICATION_TYPES.RISK_FLAG]: "At-risk flag raised",
-    [NOTIFICATION_TYPES.EMAIL_VERIFICATION]: "Verify your email address",
-  };
-  return subjects[type] || "Notification";
 }
 
 // Trigger: a submission was graded. Notify the student who owns it.
@@ -83,8 +48,24 @@ async function notifyNewAssignment({ assignment, batch: _batch, studentIds }) {
   return Promise.all(notifications);
 }
 
+// Trigger: a quiz was published to a batch. Notify every enrolled student.
+async function notifyNewQuiz({ quiz, studentIds }) {
+  const notifications = [];
+  for (const studentId of studentIds) {
+    notifications.push(
+      createNotification({
+        recipientId: String(studentId),
+        type: NOTIFICATION_TYPES.NEW_QUIZ,
+        message: `New quiz: ${quiz.title}`,
+        link: `/quizzes/${quiz._id}`,
+      }),
+    );
+  }
+  return Promise.all(notifications);
+}
+
 // Trigger: an admin reset a user's password. Notify that user.
-async function notifyPasswordReset({ userId }) {
+async function notifyAdminReset({ userId }) {
   return createNotification({
     recipientId: String(userId),
     type: NOTIFICATION_TYPES.PASSWORD_RESET,
@@ -157,13 +138,20 @@ async function markAsRead({ recipientId, notificationId }) {
   return notification;
 }
 
+async function clearAllForRecipient({ recipientId }) {
+  const result = await Notification.deleteMany({ recipient: recipientId });
+  return { deletedCount: result.deletedCount || 0 };
+}
+
 module.exports = {
   createNotification,
   notifySubmissionGraded,
   notifyNewAssignment,
-  notifyPasswordReset,
+  notifyNewQuiz,
+  notifyAdminReset,
   notifyAiDraftReady,
   notifyAnnouncement,
   listNotifications,
   markAsRead,
+  clearAllForRecipient,
 };

@@ -1,3 +1,5 @@
+// HTTP controller for c al en da rc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for calendar .ics export.
 
 const calendarService = require("../services/calendarService");

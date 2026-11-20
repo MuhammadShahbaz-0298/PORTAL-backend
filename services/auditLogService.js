@@ -1,3 +1,5 @@
+// Business logic for a ud it lo gs er vi ce.
+// Encapsulates feature rules and database access.
 // Database work for audit log entries. Read-only.
 
 const AuditLog = require("../models/AuditLog");

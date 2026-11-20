@@ -1,3 +1,5 @@
+// HTTP controller for a ud it lo gc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for audit log. Read-only.
 
 const auditLogService = require("../services/auditLogService");

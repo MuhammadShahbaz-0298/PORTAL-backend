@@ -1,3 +1,5 @@
+// HTTP controller for r ol ec on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for roles.
 
 const roleService = require("../services/roleService");

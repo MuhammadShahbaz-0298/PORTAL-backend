@@ -1,3 +1,5 @@
+// Business logic for a na ly ti cs se rv ic e.
+// Encapsulates feature rules and database access.
 // Read-only analytics aggregations. Restricted to analytics.view permission.
 
 const Submission = require("../models/Submission");
@@ -29,22 +31,16 @@ async function batchAnalytics({ requester, batchId }) {
     throw new AppError("Batch not found.", 404);
   }
 
-  const totalStudents = await Enrollment.countDocuments({ batch: batchId });
+  const totalStudents = await Enrollment.countDocuments({
+    batch: batchId,
+    active: { $ne: false },
+  });
 
   // Submission rate: distinct students who submitted at least one assignment.
   const submissions = await Submission.find({ batch: batchId }).lean();
   const submittedStudentIds = new Set(submissions.map((s) => String(s.student)));
   const submissionRate =
     totalStudents > 0 ? Math.round((submittedStudentIds.size / totalStudents) * 100) : 0;
-
-  // Grade distribution.
-  const gradeDistribution = {};
-  for (const submission of submissions) {
-    if (submission.grade) {
-      const bucket = submission.grade;
-      gradeDistribution[bucket] = (gradeDistribution[bucket] || 0) + 1;
-    }
-  }
 
   // Attendance percentage.
   const attendanceRecords = await Attendance.find({ batch: batchId }).lean();
@@ -57,7 +53,6 @@ async function batchAnalytics({ requester, batchId }) {
     batchName: batch.name,
     totalStudents,
     submissionRate,
-    gradeDistribution,
     attendancePercentage,
     totalSubmissions: submissions.length,
     totalAttendanceRecords: attendanceRecords.length,

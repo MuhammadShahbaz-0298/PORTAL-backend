@@ -33,16 +33,11 @@ const auditLogRoutes = require("./routes/auditLog");
 const analyticsRoutes = require("./routes/analytics");
 const searchRoutes = require("./routes/search");
 const exportRoutes = require("./routes/export");
-const featureFlagRoutes = require("./routes/featureFlags");
 const calendarRoutes = require("./routes/calendar");
 const aiRoutes = require("./routes/ai");
-const twoFactorRoutes = require("./routes/twoFactor");
-const ssoRoutes = require("./routes/sso");
-const googleCalendarRoutes = require("./routes/googleCalendar");
-const sessionManagementRoutes = require("./routes/sessions");
-const gdprRoutes = require("./routes/gdpr");
 const bulkImportRoutes = require("./routes/bulkImport");
 const reportCardRoutes = require("./routes/reportCard");
+const eventRoutes = require("./routes/events");
 
 const app = express();
 
@@ -82,11 +77,11 @@ app.get("/health", (request, response) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/users", gdprRoutes);
 app.use("/api", bulkImportRoutes);
 app.use("/api/users", reportCardRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/assignments", assignmentRoutes);
+app.use("/api", exportRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/submissions", submissionRoutes);
 app.use("/api/permissions", permissionRoutes);
@@ -100,14 +95,9 @@ app.use("/api/timetable", timetableRoutes);
 app.use("/api/audit-log", auditLogRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/search", searchRoutes);
-app.use("/api", exportRoutes);
 app.use("/api", calendarRoutes);
 app.use("/api/ai", aiRoutes);
-app.use("/api/auth/2fa", twoFactorRoutes);
-app.use("/api/auth/sso", ssoRoutes);
-app.use("/api/calendar/google", googleCalendarRoutes);
-app.use("/api/auth/sessions", sessionManagementRoutes);
-app.use("/api/feature-flags", featureFlagRoutes);
+app.use("/api/events", eventRoutes);
 
 app.use((request, response, next) => {
   return next(new AppError("Route not found.", 404));

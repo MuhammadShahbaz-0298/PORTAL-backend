@@ -1,5 +1,5 @@
 // A notification is an in-app message (and optionally an email) sent to one user.
-// Notifications are never hard-deleted; they are marked read instead.
+// Recipients can clear their own notifications; they cannot affect other users.
 
 const mongoose = require("mongoose");
 const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require("../constants");

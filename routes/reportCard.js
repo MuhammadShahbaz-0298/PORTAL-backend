@@ -1,3 +1,5 @@
+// HTTP routes for r ep or tc ar d.
+// Applies authentication and permissions before controllers run.
 // Routes for report card PDF export.
 
 const express = require("express");

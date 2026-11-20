@@ -1,4 +1,5 @@
-// HTTP layer for comments on submissions.
+// HTTP controller for comments on submissions.
+// Keeps request and response handling separate from business rules.
 
 const commentService = require("../services/commentService");
 const asyncHandler = require("../utils/asyncHandler");

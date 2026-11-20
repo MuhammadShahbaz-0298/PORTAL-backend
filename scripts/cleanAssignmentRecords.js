@@ -1,3 +1,5 @@
+// Maintenance script for c le an as si gn me nt re co rd s.
+// Validates its inputs before changing application data.
 // Normalizes assignment records: references, dates, numbers and archive flags.
 
 const Assignment = require("../models/Assignment");

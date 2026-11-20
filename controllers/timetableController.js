@@ -1,3 +1,5 @@
+// HTTP controller for t im et ab le co nt ro ll er.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for timetable entries.
 
 const timetableService = require("../services/timetableService");

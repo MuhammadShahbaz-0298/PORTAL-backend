@@ -1,3 +1,5 @@
+// HTTP controller for n ot if ic at io nc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for notifications. Users only see their own notifications.
 
 const notificationService = require("../services/notificationService");
@@ -20,4 +22,11 @@ const markAsRead = asyncHandler(async (request, response) => {
   return response.json(notification);
 });
 
-module.exports = { listNotifications, markAsRead };
+const clearAll = asyncHandler(async (request, response) => {
+  const result = await notificationService.clearAllForRecipient({
+    recipientId: request.user.userId,
+  });
+  return response.json(result);
+});
+
+module.exports = { listNotifications, markAsRead, clearAll };

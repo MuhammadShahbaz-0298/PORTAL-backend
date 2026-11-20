@@ -1,3 +1,5 @@
+// Business logic for a ia ss ig nm en td ra ft se rv ic e.
+// Encapsulates feature rules and database access.
 // AI assignment draft generator. Draft only; nothing is saved automatically.
 
 const fs = require("fs/promises");

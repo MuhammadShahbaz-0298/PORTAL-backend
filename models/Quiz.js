@@ -2,7 +2,7 @@
 // Questions store the correct index, but it is never sent to students.
 
 const mongoose = require("mongoose");
-const { ASSIGNMENT_TITLE_MAX_LENGTH } = require("../constants");
+const { ASSIGNMENT_TITLE_MAX_LENGTH, QUIZ_MAX_TIME_LIMIT_MINUTES } = require("../constants");
 
 const quizQuestionSchema = new mongoose.Schema(
   {
@@ -43,6 +43,11 @@ const quizSchema = new mongoose.Schema(
     questions: {
       type: [quizQuestionSchema],
       default: [],
+    },
+    timeLimitMinutes: {
+      type: Number,
+      min: 1,
+      max: QUIZ_MAX_TIME_LIMIT_MINUTES,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

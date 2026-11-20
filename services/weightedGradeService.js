@@ -24,10 +24,6 @@ async function computeWeightedScore({ requester, studentId, batchId }) {
   if (role === ROLES.TEACHER) {
     await batchAccessService.assertCanManageBatch(requester, batchId);
   }
-  if (role === "guardian") {
-    const guardianService = require("./guardianService");
-    await guardianService.assertCanViewChild(requester, studentId);
-  }
 
   const batch = await Batch.findById(batchId).lean();
   if (!batch) {

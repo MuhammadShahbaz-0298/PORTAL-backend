@@ -1,3 +1,5 @@
+// HTTP controller for u se rc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for users and account lifecycle actions.
 
 const userService = require("../services/userService");

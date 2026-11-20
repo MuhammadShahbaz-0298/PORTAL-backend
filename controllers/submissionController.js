@@ -1,3 +1,5 @@
+// HTTP controller for s ub mi ss io nc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for submissions, grading, downloads and AI drafts.
 
 const submissionService = require("../services/submissionService");

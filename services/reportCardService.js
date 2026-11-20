@@ -4,6 +4,7 @@
 const PDFDocument = require("pdfkit");
 const User = require("../models/User");
 const Batch = require("../models/Batch");
+const Enrollment = require("../models/Enrollment");
 const Submission = require("../models/Submission");
 const Attendance = require("../models/Attendance");
 const { ROLES } = require("../constants");
@@ -12,9 +13,27 @@ const { getUserId, getUserRole } = require("../utils/authorization");
 const { assertObjectId } = require("../utils/validation");
 const batchAccessService = require("./batchAccessService");
 
+async function resolveBatchId(userId, batchId) {
+  if (batchId) {
+    assertObjectId(batchId, "batch id");
+    return batchId;
+  }
+  const enrollments = await Enrollment.find({
+    student: userId,
+    active: { $ne: false },
+  })
+    .select("batch")
+    .lean();
+  const batchIds = [...new Set(enrollments.map((e) => String(e.batch)).filter(Boolean))];
+  if (batchIds.length === 1) return batchIds[0];
+  if (batchIds.length === 0) {
+    throw new AppError("This student is not enrolled in an active batch.", 400);
+  }
+  throw new AppError("Specify batchId. This student belongs to multiple active batches.", 400);
+}
+
 async function buildReportCard({ requester, userId, batchId }) {
   assertObjectId(userId, "user id");
-  assertObjectId(batchId, "batch id");
 
   const role = getUserRole(requester);
   const requesterId = getUserId(requester);
@@ -22,12 +41,13 @@ async function buildReportCard({ requester, userId, batchId }) {
   if (role === ROLES.STUDENT && requesterId !== userId) {
     throw new AppError("You cannot view another student's report card.", 403);
   }
+
+  const resolvedBatchId = await resolveBatchId(userId, batchId);
+
   if (role === ROLES.TEACHER) {
-    await batchAccessService.assertCanManageBatch(requester, batchId);
-  }
-  if (role === "guardian") {
-    const guardianService = require("./guardianService");
-    await guardianService.assertCanViewChild(requester, userId);
+    await batchAccessService.assertCanManageBatch(requester, resolvedBatchId);
+  } else if (role === ROLES.STUDENT) {
+    await batchAccessService.assertCanAccessBatch(requester, resolvedBatchId);
   }
 
   const student = await User.findById(userId).select("name email role").lean();
@@ -35,13 +55,13 @@ async function buildReportCard({ requester, userId, batchId }) {
     throw new AppError("Student not found.", 404);
   }
 
-  const batch = await Batch.findById(batchId).lean();
+  const batch = await Batch.findById(resolvedBatchId).lean();
   if (!batch) {
     throw new AppError("Batch not found.", 404);
   }
 
-  const submissions = await Submission.find({ student: userId, batch: batchId }).lean();
-  const attendance = await Attendance.find({ student: userId, batch: batchId }).lean();
+  const submissions = await Submission.find({ student: userId, batch: resolvedBatchId }).lean();
+  const attendance = await Attendance.find({ student: userId, batch: resolvedBatchId }).lean();
 
   const schoolName = process.env.REPORT_CARD_SCHOOL_NAME || "School Portal";
 

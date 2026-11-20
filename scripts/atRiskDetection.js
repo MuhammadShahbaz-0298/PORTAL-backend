@@ -16,20 +16,31 @@ const Attendance = require("../models/Attendance");
 const Assignment = require("../models/Assignment");
 const RiskFlag = require("../models/RiskFlag");
 
-async function runDetection() {
-  const environment = loadEnvironment(process.env);
-  await connectDB(environment.mongoUri);
+async function runDetection(settings = {}) {
+  const attendanceThreshold = settings.attendanceThreshold;
+  const missedSubmissionThreshold = settings.missedSubmissionThreshold;
 
-  const attendanceThreshold = Number(process.env.AT_RISK_ATTENDANCE_THRESHOLD) || 70;
-  const missedSubmissionThreshold = Number(process.env.AT_RISK_MISSED_SUBMISSIONS) || 2;
+  if (!Number.isFinite(attendanceThreshold) || !Number.isInteger(missedSubmissionThreshold)) {
+    throw new Error("At-risk detection thresholds must be provided by environment variables.");
+  }
 
   const batches = await Batch.find({ active: true }).lean();
+  const now = new Date();
 
   for (const batch of batches) {
-    const enrollments = await Enrollment.find({ batch: batch._id }).select("student").lean();
+    const enrollments = await Enrollment.find({
+      batch: batch._id,
+      active: { $ne: false },
+    })
+      .select("student")
+      .lean();
     const studentIds = enrollments.map((e) => e.student);
 
-    const assignments = await Assignment.find({ batch: batch._id, active: true })
+    const assignments = await Assignment.find({
+      batch: batch._id,
+      active: true,
+      dueDate: { $lte: now },
+    })
       .select("_id")
       .lean();
     const assignmentIds = assignments.map((a) => a._id);
@@ -62,11 +73,15 @@ async function runDetection() {
       if (attendancePercentage < attendanceThreshold) {
         reasons.push("low_attendance");
       }
-      if (missedSubmissions >= missedSubmissionThreshold) {
+      if (missedSubmissions > missedSubmissionThreshold) {
         reasons.push("missed_submissions");
       }
 
       if (reasons.length === 0) {
+        await RiskFlag.updateMany(
+          { student: studentId, batch: batch._id, status: "open" },
+          { $set: { status: "resolved", resolvedAt: now } },
+        );
         continue;
       }
 
@@ -87,14 +102,17 @@ async function runDetection() {
   }
 
   console.info("At-risk detection complete.");
-  await mongoose.disconnect();
 }
 
 if (require.main === module) {
-  runDetection().catch((error) => {
-    console.error("At-risk detection failed:", error.message);
-    process.exit(1);
-  });
+  const environment = loadEnvironment(process.env);
+  connectDB(environment.mongoUri)
+    .then(() => runDetection(environment.atRisk))
+    .catch((error) => {
+      console.error("At-risk detection failed:", error.message);
+      process.exit(1);
+    })
+    .finally(() => mongoose.disconnect());
 }
 
 module.exports = { runDetection };

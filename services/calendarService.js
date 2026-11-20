@@ -1,3 +1,5 @@
+// Business logic for c al en da rs er vi ce.
+// Encapsulates feature rules and database access.
 // Generates an iCalendar (.ics) feed for a user's assignment due dates and announcements.
 
 const { createEvents } = require("ics");

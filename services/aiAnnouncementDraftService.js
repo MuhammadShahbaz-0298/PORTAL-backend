@@ -1,3 +1,5 @@
+// Business logic for a ia nn ou nc em en td ra ft se rv ic e.
+// Encapsulates feature rules and database access.
 // AI announcement draft helper. Draft only; never auto-publish.
 
 const { askAI } = require("../utils/aiClient");

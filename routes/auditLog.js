@@ -1,3 +1,5 @@
+// HTTP routes for a ud it lo g.
+// Applies authentication and permissions before controllers run.
 // Routes for audit log. Read-only, restricted to audit.view permission.
 
 const express = require("express");

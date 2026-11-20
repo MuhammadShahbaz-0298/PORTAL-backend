@@ -1,3 +1,5 @@
+// HTTP controller for a na ly ti cs co nt ro ll er.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for analytics. Read-only.
 
 const analyticsService = require("../services/analyticsService");

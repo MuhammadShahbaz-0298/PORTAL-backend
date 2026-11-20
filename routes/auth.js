@@ -1,3 +1,5 @@
+// HTTP routes for a ut h.
+// Applies authentication and permissions before controllers run.
 // Routes for authentication. Login and refresh are public, everything else needs a session.
 
 const express = require("express");
@@ -12,8 +14,6 @@ const {
   getMe,
   changePassword,
 } = require("../controllers/authController");
-const { forgotPassword, resetPassword } = require("../controllers/passwordResetController");
-const { verifyEmail } = require("../controllers/emailVerificationController");
 
 const router = express.Router();
 
@@ -21,9 +21,6 @@ const router = express.Router();
 router.post("/register", auth, requirePermission("students.create"), register);
 router.post("/login", login);
 router.post("/refresh", refresh);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
-router.get("/verify-email/:token", verifyEmail);
 
 // Logout works from the refresh cookie, so it still works when the access token expired.
 router.post("/logout", logout);

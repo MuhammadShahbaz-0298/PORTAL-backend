@@ -1,13 +1,12 @@
-// Bulk CSV import for users and batch enrollment.
-// Reuses the existing service functions; returns a per-row report.
+// Import users and batch enrollment rows from Excel workbooks.
+// Each valid workbook row gets an independent result in the import report.
 
-const { parse } = require("csv-parse/sync");
 const registrationService = require("./registrationService");
-const batchService = require("./batchService");
+const batchEnrollmentService = require("./batchEnrollmentService");
+const { parseWorkbookRows, createUserImportTemplate } = require("../utils/excelWorkbook");
 
-async function bulkImportUsers({ requester, csvBuffer }) {
-  const records = parse(csvBuffer, { columns: true, skip_empty_lines: true, trim: true });
-
+async function bulkImportUsers({ requester, workbookBuffer }) {
+  const records = await parseWorkbookRows(workbookBuffer, ["name", "email", "password", "role"]);
   const results = [];
 
   for (const row of records) {
@@ -30,17 +29,16 @@ async function bulkImportUsers({ requester, csvBuffer }) {
   return results;
 }
 
-async function bulkEnroll({ requester, batchId, csvBuffer }) {
-  const records = parse(csvBuffer, { columns: true, skip_empty_lines: true, trim: true });
-
+async function bulkEnroll({ requester, batchId, workbookBuffer }) {
+  const records = await parseWorkbookRows(workbookBuffer, ["studentid"]);
   const results = [];
 
   for (const row of records) {
     try {
-      const enrollment = await batchService.enrollStudent({
+      const enrollment = await batchEnrollmentService.enrollStudent({
         requester,
         batchId,
-        payload: { studentId: row.studentId },
+        payload: { studentId: row.studentid },
       });
       results.push({ row, success: true, enrollmentId: enrollment._id });
     } catch (error) {
@@ -51,4 +49,9 @@ async function bulkEnroll({ requester, batchId, csvBuffer }) {
   return results;
 }
 
-module.exports = { bulkImportUsers, bulkEnroll };
+module.exports = {
+  bulkImportUsers,
+  bulkEnroll,
+  createUserImportTemplate,
+  parseWorkbookRows,
+};

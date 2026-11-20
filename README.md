@@ -101,16 +101,17 @@ Never commit `.env`. `.gitignore` already excludes it.
 
 ## Scripts
 
-| Command                                   | What it does                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| `npm start`                               | Start the API.                                                                  |
-| `npm run dev`                             | Start with nodemon.                                                             |
-| `npm test`                                | Run all tests against an in-memory MongoDB.                                     |
-| `npm run lint` / `npm run lint:fix`       | Check, or fix, code problems with ESLint.                                       |
-| `npm run format` / `npm run format:check` | Format, or check formatting, with Prettier.                                     |
-| `npm run seed:admin`                      | Create the first admin from environment variables.                              |
-| `npm run db:migrate-teacher-permissions`  | Add newer teacher permissions to the existing teacher role. Dry run by default. |
-| `npm run db:clean`                        | Normalize data and report duplicates and orphans. Dry run by default.           |
+| Command                                   | What it does                                                                           |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm start`                               | Start the API.                                                                         |
+| `npm run dev`                             | Start with nodemon.                                                                    |
+| `npm test`                                | Run all tests against an in-memory MongoDB.                                            |
+| `npm run lint` / `npm run lint:fix`       | Check, or fix, code problems with ESLint.                                              |
+| `npm run format` / `npm run format:check` | Format, or check formatting, with Prettier.                                            |
+| `npm run seed:admin`                      | Create the first admin from environment variables.                                     |
+| `npm run db:migrate-teacher-permissions`  | Add newer teacher permissions to the existing teacher role. Dry run by default.        |
+| `npm run db:migrate-role-permissions`     | Add every new role default to existing role documents. Dry run by default; idempotent. |
+| `npm run db:clean`                        | Normalize data and report duplicates and orphans. Dry run by default.                  |
 
 Scripts that write data refuse to run without `--apply --i-have-a-backup`. Take
 a `mongodump` backup first and read `docs/DATABASE.md`.
@@ -135,8 +136,8 @@ All routes are under `/api`. Full details are in `docs/API.md`.
 | Area        | Routes                                                                                                                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth        | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/change-password`, `/auth/register`; `GET /auth/me`                                                                                   |
-| Users       | `GET /users`, `PATCH /users/:id`, `PATCH /users/:id/reset-password`, `DELETE /users/:id`                                                                                                                             |
-| Batches     | `GET/POST /batches`, `PATCH/DELETE /batches/:id`, `POST /batches/:id/enroll`, `GET /batches/:id/students`                                                                                                            |
+| Users       | `GET /users`, `PATCH /users/:id`, `PATCH /users/:id/reset-password`, `DELETE /users/:id`, Excel import/template and export                                                                                          |
+| Batches     | `GET/POST /batches`, `PATCH/DELETE /batches/:id`, `POST /batches/:id/enroll`, `GET /batches/:id/students` and eligible-student lists                                                                                 |
 | Assignments | `GET/POST /assignments`, `GET/PATCH/DELETE /assignments/:id`                                                                                                                                                         |
 | Submissions | `GET /submissions`, `POST /submissions`, `PATCH /submissions/:id/file`, `PATCH /submissions/:id/grade`, `GET /submissions/:id/download`, `POST /submissions/:id/ai-draft`, `PATCH /submissions/:id/ai-draft/discard` |
 | Attendance  | `GET/POST /attendance`, `GET /attendance/:studentId`, `PATCH /attendance/:id`                                                                                                                                        |
@@ -146,6 +147,10 @@ All routes are under `/api`. Full details are in `docs/API.md`.
 Lists return a plain array. Paging details come in the `X-Page`, `X-Page-Limit`
 and `X-Total-Count` headers. Errors use one shape:
 `{ "success": false, "error": "message" }`.
+
+User imports and the user, attendance, and submission exports use `.xlsx`
+workbooks. The user import template is available from
+`GET /api/users/bulk-import/template`; import the first `Users` worksheet only.
 
 ## Using the API (from a frontend or Postman)
 

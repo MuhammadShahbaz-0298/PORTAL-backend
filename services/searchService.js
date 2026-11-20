@@ -57,7 +57,7 @@ async function globalSearch({ requester, query }) {
     if (role === ROLES.TEACHER) {
       const ownedBatchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
       const enrollments = await require("../models/Enrollment")
-        .find({ batch: { $in: ownedBatchIds } })
+        .find({ batch: { $in: ownedBatchIds }, active: { $ne: false } })
         .select("student")
         .lean();
       const studentIds = enrollments.map((e) => e.student);

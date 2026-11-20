@@ -1,3 +1,5 @@
+// HTTP routes for p er mi ss io ns.
+// Applies authentication and permissions before controllers run.
 // Routes for the permission catalog and per-user extra permissions.
 
 const express = require("express");

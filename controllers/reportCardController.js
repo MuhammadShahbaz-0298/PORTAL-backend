@@ -1,3 +1,5 @@
+// HTTP controller for r ep or tc ar dc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for report card PDF export.
 
 const reportCardService = require("../services/reportCardService");

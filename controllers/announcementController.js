@@ -1,3 +1,5 @@
+// HTTP controller for a nn ou nc em en tc on tr ol le r.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for announcements.
 
 const announcementService = require("../services/announcementService");

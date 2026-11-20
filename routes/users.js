@@ -1,3 +1,5 @@
+// HTTP routes for u se rs.
+// Applies authentication and permissions before controllers run.
 // Routes for users. Teachers only see students in their own batches.
 
 const express = require("express");

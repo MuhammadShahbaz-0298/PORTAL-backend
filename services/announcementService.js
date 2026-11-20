@@ -4,51 +4,13 @@
 const Announcement = require("../models/Announcement");
 const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
-const { ROLES, ANNOUNCEMENT_SCOPES } = require("../constants");
+const { ANNOUNCEMENT_SCOPES } = require("../constants");
 const { AppError } = require("../utils/errors");
-const { getUserId, getUserRole, isAdmin } = require("../utils/authorization");
+const { getUserId, isAdmin } = require("../utils/authorization");
 const { assertObjectId, assertString, pickFields } = require("../utils/validation");
-const { buildSearchFilter } = require("../utils/search");
-const { getPagination } = require("../utils/pagination");
 const batchAccessService = require("./batchAccessService");
 const notificationService = require("./notificationService");
-
-async function listAnnouncements({ requester, query }) {
-  const pagination = getPagination(query);
-  const searchFilter = buildSearchFilter(query.search, ["title", "body"]);
-  const filters = [{ active: true }, searchFilter];
-  const role = getUserRole(requester);
-
-  if (role === ROLES.ADMIN) {
-    // Admins see everything.
-  } else if (role === ROLES.TEACHER) {
-    const ownedBatchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
-    filters.push({
-      $or: [{ scope: "school" }, { scope: "batch", batch: { $in: ownedBatchIds } }],
-    });
-  } else if (role === ROLES.STUDENT || role === "guardian") {
-    const studentId = getUserId(requester);
-    const batchIds =
-      role === ROLES.STUDENT ? await batchAccessService.getStudentBatchIds(studentId) : [];
-    filters.push({
-      $or: [{ scope: "school" }, { scope: "batch", batch: { $in: batchIds } }],
-    });
-  } else {
-    filters.push({ scope: "school" });
-  }
-
-  const filter = filters.length ? { $and: filters } : {};
-  const total = await Announcement.countDocuments(filter);
-  const items = await Announcement.find(filter)
-    .populate("createdBy", "name email role")
-    .populate("batch", "name")
-    .sort({ createdAt: -1 })
-    .skip(pagination.skip)
-    .limit(pagination.limit)
-    .lean();
-
-  return { items, pagination, total };
-}
+const announcementReadService = require("./announcementReadService");
 
 async function createAnnouncement({ requester, payload }) {
   const fields = pickFields(payload, ["title", "body", "scope", "batchId"]);
@@ -76,16 +38,21 @@ async function createAnnouncement({ requester, payload }) {
 
   // Notify the audience. This is best-effort; announcement creation still succeeds if it fails.
   try {
-    const recipientIds = await announcementRecipientIds(scope, batchId);
+    const recipientIds = await announcementRecipientIds(scope, batchId, getUserId(requester));
     await notificationService.notifyAnnouncement({
       announcement: { _id: announcement._id, title },
       recipientIds,
     });
-  } catch {
-    // Do not let notification failures break announcement creation.
+  } catch (error) {
+    console.error("[announcement_notification_failed]", {
+      announcementId: String(announcement._id),
+      error: error.message,
+    });
   }
 
-  return announcement.populate("createdBy", "name email role").populate("batch", "name");
+  await announcement.populate("createdBy", "name email role");
+  await announcement.populate("batch", "name");
+  return announcement;
 }
 
 async function updateAnnouncement({ requester, announcementId, payload }) {
@@ -129,7 +96,9 @@ async function updateAnnouncement({ requester, announcementId, payload }) {
   }
 
   await announcement.save();
-  return announcement.populate("createdBy", "name email role").populate("batch", "name");
+  await announcement.populate("createdBy", "name email role");
+  await announcement.populate("batch", "name");
+  return announcement;
 }
 
 async function archiveAnnouncement({ requester, announcementId }) {
@@ -152,23 +121,35 @@ async function archiveAnnouncement({ requester, announcementId }) {
 }
 
 // Resolves the user ids who should receive a notification for an announcement.
-async function announcementRecipientIds(scope, batchId) {
+async function announcementRecipientIds(scope, batchId, authorId) {
   if (scope === "school") {
-    const users = await User.find({ active: true }).select("_id").lean();
+    const users = await User.find({
+      active: true,
+      _id: { $ne: authorId },
+    })
+      .select("_id")
+      .lean();
     return users.map((user) => user._id);
   }
 
   if (scope === "batch" && batchId) {
-    const enrollments = await Enrollment.find({ batch: batchId }).select("student").lean();
-    return enrollments.map((enrollment) => enrollment.student);
+    const enrollments = await Enrollment.find({
+      batch: batchId,
+      active: { $ne: false },
+    })
+      .select("student")
+      .lean();
+    return enrollments
+      .map((enrollment) => enrollment.student)
+      .filter((studentId) => String(studentId) !== String(authorId));
   }
 
   return [];
 }
 
 module.exports = {
-  listAnnouncements,
   createAnnouncement,
   updateAnnouncement,
   archiveAnnouncement,
+  ...announcementReadService,
 };

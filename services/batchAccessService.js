@@ -47,6 +47,7 @@ async function assertCanAccessBatch(user, batchId) {
     const enrollmentExists = await Enrollment.exists({
       student: getUserId(user),
       batch: batchId,
+      active: { $ne: false },
     });
 
     if (enrollmentExists) {
@@ -63,12 +64,21 @@ async function getTeacherBatchIds(userId) {
 }
 
 async function getStudentBatchIds(userId) {
-  const enrollments = await Enrollment.find({ student: userId }).select("batch").lean();
+  const enrollments = await Enrollment.find({
+    student: userId,
+    active: { $ne: false },
+  })
+    .select("batch")
+    .lean();
   return enrollments.map((enrollment) => enrollment.batch);
 }
 
 async function assertStudentEnrolled(studentId, batchId) {
-  const enrollmentExists = await Enrollment.exists({ student: studentId, batch: batchId });
+  const enrollmentExists = await Enrollment.exists({
+    student: studentId,
+    batch: batchId,
+    active: { $ne: false },
+  });
 
   if (!enrollmentExists) {
     throw new AppError("Student is not enrolled in this batch.", 400);
@@ -76,6 +86,7 @@ async function assertStudentEnrolled(studentId, batchId) {
 }
 
 module.exports = {
+  canManageBatch,
   assertCanManageBatch,
   assertCanAccessBatch,
   getTeacherBatchIds,

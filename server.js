@@ -4,6 +4,7 @@
 require("dotenv").config();
 
 const mongoose = require("mongoose");
+const cron = require("node-cron");
 const connectDB = require("./config/db");
 const { loadEnvironment } = require("./config/env");
 
@@ -23,10 +24,14 @@ if (!environment.ai.enabled) {
 // The app is required after the environment check, because it reads FRONTEND_URL.
 const app = require("./app");
 const aiDraftService = require("./services/aiDraftService");
+const { runDetection: runAtRiskDetection } = require("./scripts/atRiskDetection");
+const { syncCoreRoles } = require("./services/roleService");
 let server;
+let atRiskTask;
 
 async function startServer() {
   await connectDB(environment.mongoUri);
+  await syncCoreRoles();
   server = app.listen(environment.port, () => {
     console.info(`Server running on port ${environment.port}`);
   });
@@ -37,6 +42,18 @@ async function startServer() {
       console.error("AI draft recovery failed.");
     });
   }
+
+  if (environment.atRisk?.enabled) {
+    atRiskTask = cron.schedule(environment.atRisk.schedule, () => {
+      runAtRiskDetection(environment.atRisk).catch((error) => {
+        console.error("At-risk detection failed:", error.message);
+      });
+    });
+
+    runAtRiskDetection(environment.atRisk).catch((error) => {
+      console.error("At-risk detection failed:", error.message);
+    });
+  }
 }
 
 async function shutdown(signal) {
@@ -44,6 +61,10 @@ async function shutdown(signal) {
 
   if (!server) {
     process.exit(0);
+  }
+
+  if (atRiskTask) {
+    atRiskTask.stop();
   }
 
   server.close(async () => {

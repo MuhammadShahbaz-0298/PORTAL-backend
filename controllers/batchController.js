@@ -1,6 +1,8 @@
-// HTTP layer for batches and enrollment.
+// Handle HTTP requests for batches and enrollment.
+// Delegate business rules and ownership checks to the batch service.
 
 const batchService = require("../services/batchService");
+const batchEnrollmentService = require("../services/batchEnrollmentService");
 const asyncHandler = require("../utils/asyncHandler");
 const { sendPaginatedList } = require("../utils/pagination");
 
@@ -43,7 +45,7 @@ const archiveBatch = asyncHandler(async (request, response) => {
 });
 
 const enrollStudent = asyncHandler(async (request, response) => {
-  const enrollment = await batchService.enrollStudent({
+  const enrollment = await batchEnrollmentService.enrollStudent({
     requester: request.user,
     batchId: request.params.id,
     payload: request.body,
@@ -51,8 +53,26 @@ const enrollStudent = asyncHandler(async (request, response) => {
   return response.status(201).json(enrollment);
 });
 
+const unenrollStudent = asyncHandler(async (request, response) => {
+  const result = await batchEnrollmentService.unenrollStudent({
+    requester: request.user,
+    batchId: request.params.id,
+    studentId: request.params.studentId,
+  });
+  return response.json(result);
+});
+
 const getBatchStudents = asyncHandler(async (request, response) => {
   const result = await batchService.getBatchStudents({
+    requester: request.user,
+    batchId: request.params.id,
+    query: request.query,
+  });
+  return sendPaginatedList(response, result.items, result.pagination, result.total);
+});
+
+const getEligibleStudents = asyncHandler(async (request, response) => {
+  const result = await batchService.getEligibleStudents({
     requester: request.user,
     batchId: request.params.id,
     query: request.query,
@@ -67,5 +87,7 @@ module.exports = {
   archiveBatch,
   deleteBatch,
   enrollStudent,
+  unenrollStudent,
   getBatchStudents,
+  getEligibleStudents,
 };

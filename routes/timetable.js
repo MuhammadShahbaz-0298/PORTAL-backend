@@ -1,3 +1,5 @@
+// HTTP routes for t im et ab le.
+// Applies authentication and permissions before controllers run.
 // Routes for timetable entries.
 
 const express = require("express");
@@ -13,9 +15,9 @@ const {
 const router = express.Router();
 
 router.use(auth);
-router.get("/", requirePermission("batches.view"), listEntries);
-router.post("/", requirePermission("batches.update"), createEntry);
-router.patch("/:id", requirePermission("batches.update"), updateEntry);
-router.patch("/:id/archive", requirePermission("batches.update"), archiveEntry);
+router.get("/", requirePermission("timetable.view"), listEntries);
+router.post("/", requirePermission("timetable.manage"), createEntry);
+router.patch("/:id", requirePermission("timetable.manage"), updateEntry);
+router.patch("/:id/archive", requirePermission("timetable.manage"), archiveEntry);
 
 module.exports = router;

@@ -3,44 +3,7 @@
 
 const mongoose = require("mongoose");
 const { AppError } = require("./errors");
-
-function isPlainObject(value) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function assertPlainObject(value, field = "body") {
-  if (!isPlainObject(value)) {
-    throw new AppError(`${field} must be an object.`, 400);
-  }
-
-  return value;
-}
-
-// Reject {"$gt": ""} and similar NoSQL injection attempts anywhere in the input.
-function assertNoMongoOperators(value, path = "body") {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => assertNoMongoOperators(item, `${path}[${index}]`));
-    return value;
-  }
-
-  if (!isPlainObject(value)) {
-    return value;
-  }
-
-  for (const [key, child] of Object.entries(value)) {
-    if (key.startsWith("$")) {
-      throw new AppError(`${path} contains a forbidden key.`, 400);
-    }
-    assertNoMongoOperators(child, `${path}.${key}`);
-  }
-
-  return value;
-}
+const objectChecks = require("./objectChecks");
 
 function assertString(value, field, options = {}) {
   const { allowEmpty = false, maxLength = 1000, minLength = allowEmpty ? 0 : 1 } = options;
@@ -156,14 +119,13 @@ function assertArrayOfStrings(value, field, options = {}) {
 }
 
 module.exports = {
+  ...objectChecks,
   assertArrayOfStrings,
   assertBoolean,
   assertDate,
   assertEnum,
-  assertNoMongoOperators,
   assertNumber,
   assertObjectId,
   assertOptionalString,
-  assertPlainObject,
   assertString,
 };

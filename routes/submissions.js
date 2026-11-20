@@ -1,3 +1,5 @@
+// HTTP routes for s ub mi ss io ns.
+// Applies authentication and permissions before controllers run.
 // Routes for submissions. Students upload only their own work; teachers grade their own batches.
 
 const express = require("express");

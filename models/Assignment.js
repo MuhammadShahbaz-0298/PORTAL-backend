@@ -59,16 +59,6 @@ const assignmentSchema = new mongoose.Schema(
       enum: RESUBMISSION_POLICIES,
       default: "allowed",
     },
-    latePolicy: {
-      type: {
-        type: String,
-        enum: ["none", "percentagePerDay", "flat"],
-        default: "none",
-      },
-      percentage: { type: Number, min: 0, max: 100, default: 0 },
-      flatAmount: { type: Number, min: 0, default: 0 },
-      graceDays: { type: Number, min: 0, default: 0 },
-    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

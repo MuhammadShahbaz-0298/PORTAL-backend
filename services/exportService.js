@@ -1,7 +1,7 @@
-// Streams CSV for users, attendance and submissions.
+// Builds Excel workbooks for users, attendance and submissions.
 // Respects the same permission checks as the underlying list endpoints.
 
-const { Parser } = require("json2csv");
+const ExcelJS = require("exceljs");
 const User = require("../models/User");
 const Attendance = require("../models/Attendance");
 const Submission = require("../models/Submission");
@@ -9,9 +9,18 @@ const { ROLES } = require("../constants");
 const { getUserId, getUserRole } = require("../utils/authorization");
 const batchAccessService = require("./batchAccessService");
 
-function toCsv(rows, fields) {
-  const parser = new Parser({ fields });
-  return parser.parse(rows);
+async function toExcel(rows, fields, worksheetName) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(worksheetName);
+  worksheet.columns = fields.map((field) => ({
+    header: field,
+    key: field,
+    width: Math.min(Math.max(field.length + 4, 16), 32),
+  }));
+  rows.forEach((row) => worksheet.addRow(row));
+  worksheet.getRow(1).font = { bold: true };
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 async function exportUsers({ requester }) {
@@ -21,7 +30,7 @@ async function exportUsers({ requester }) {
   if (role === ROLES.TEACHER) {
     const batchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));
     const enrollments = await require("../models/Enrollment")
-      .find({ batch: { $in: batchIds } })
+      .find({ batch: { $in: batchIds }, active: { $ne: false } })
       .select("student")
       .lean();
     const studentIds = enrollments.map((e) => e.student);
@@ -37,7 +46,7 @@ async function exportUsers({ requester }) {
     createdAt: u.createdAt,
   }));
 
-  return toCsv(rows, ["name", "email", "role", "active", "createdAt"]);
+  return toExcel(rows, ["name", "email", "role", "active", "createdAt"], "Users");
 }
 
 async function exportAttendance({ requester, query }) {
@@ -70,7 +79,11 @@ async function exportAttendance({ requester, query }) {
     leaveReason: r.leaveReason || "",
   }));
 
-  return toCsv(rows, ["student", "email", "batch", "date", "status", "leaveReason"]);
+  return toExcel(
+    rows,
+    ["student", "email", "batch", "date", "status", "leaveReason"],
+    "Attendance",
+  );
 }
 
 async function exportSubmissions({ requester, query }) {
@@ -106,16 +119,11 @@ async function exportSubmissions({ requester, query }) {
     submittedAt: s.submittedAt,
   }));
 
-  return toCsv(rows, [
-    "student",
-    "email",
-    "assignment",
-    "batch",
-    "status",
-    "grade",
-    "feedback",
-    "submittedAt",
-  ]);
+  return toExcel(
+    rows,
+    ["student", "email", "assignment", "batch", "status", "grade", "feedback", "submittedAt"],
+    "Submissions",
+  );
 }
 
 module.exports = { exportUsers, exportAttendance, exportSubmissions };

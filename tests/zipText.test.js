@@ -1,3 +1,5 @@
+// Tests for z ip te xt.t es t.
+// Verifies observable behavior without depending on test order.
 // Tests for reading source text from a ZIP with hard caps.
 
 const assert = require("node:assert/strict");

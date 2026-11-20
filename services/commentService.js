@@ -15,7 +15,7 @@ async function assertSubmissionAccess(requester, submissionId) {
 
   const submission = await Submission.findById(submissionId).populate("batch", "teacher");
 
-  if (!submission || !submission.active) {
+  if (!submission) {
     throw new AppError("Submission not found.", 404);
   }
 

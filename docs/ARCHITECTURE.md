@@ -129,7 +129,6 @@ Rules enforced in services:
 
 ## Deliberate non-goals
 
-- No email verification, password reset email, or 2FA.
 - No background job runner. Session cleanup uses a MongoDB TTL index.
 - No Redis. Login lockout is in process memory, which fits one Render replica.
 - No refresh-token rotation grace window: replay is treated as compromise.

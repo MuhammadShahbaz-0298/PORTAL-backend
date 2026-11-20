@@ -2,6 +2,7 @@
 // The score is auto-computed on submit.
 
 const mongoose = require("mongoose");
+const { QUIZ_ATTEMPT_STATUSES } = require("../constants");
 
 const quizAttemptSchema = new mongoose.Schema(
   {
@@ -27,9 +28,18 @@ const quizAttemptSchema = new mongoose.Schema(
       type: [Number],
       default: [],
     },
+    status: {
+      type: String,
+      enum: Object.values(QUIZ_ATTEMPT_STATUSES),
+      default: QUIZ_ATTEMPT_STATUSES.SUBMITTED,
+      index: true,
+    },
     score: { type: Number, default: 0, min: 0 },
     total: { type: Number, default: 0, min: 0 },
-    submittedAt: { type: Date, default: Date.now },
+    startedAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null },
+    submittedAt: { type: Date, default: null },
+    focusViolationCount: { type: Number, default: 0, min: 0 },
   },
   { timestamps: true, strict: true },
 );

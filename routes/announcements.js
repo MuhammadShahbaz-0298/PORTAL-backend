@@ -1,3 +1,5 @@
+// HTTP routes for a nn ou nc em en ts.
+// Applies authentication and permissions before controllers run.
 // Routes for announcements. Batch-scoped ownership is checked inside the service.
 
 const express = require("express");

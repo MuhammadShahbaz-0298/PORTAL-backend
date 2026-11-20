@@ -1,3 +1,5 @@
+// HTTP routes for a i.
+// Applies authentication and permissions before controllers run.
 // Routes for AI helpers.
 
 const express = require("express");
@@ -10,6 +12,6 @@ const router = express.Router();
 
 router.use(auth);
 router.post("/assignment-draft", requirePermission("assignments.create"), generateDraft);
-router.post("/assistant/ask", requirePermission("dashboard.view"), ask);
+router.post("/assistant/ask", requirePermission("assistant.use"), ask);
 
 module.exports = router;

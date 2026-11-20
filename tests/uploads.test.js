@@ -1,3 +1,5 @@
+// Tests for u pl oa ds.t es t.
+// Verifies observable behavior without depending on test order.
 // Tests for ZIP magic bytes, ZIP bomb limits and path traversal protection.
 
 const assert = require("node:assert/strict");

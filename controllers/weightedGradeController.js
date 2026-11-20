@@ -1,3 +1,5 @@
+// HTTP controller for w ei gh te dg ra de co nt ro ll er.
+// Keeps request and response handling separate from business rules.
 // HTTP layer for weighted grade computation.
 
 const weightedGradeService = require("../services/weightedGradeService");

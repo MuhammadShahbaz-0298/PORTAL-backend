@@ -1,40 +1,21 @@
 // HTTP layer for login, refresh, logout, registration and password changes.
+// Authentication cookies and client-specific response shaping live in authResponse.js.
 
 const User = require("../models/User");
 const Batch = require("../models/Batch");
 const authService = require("../services/authService");
 const registrationService = require("../services/registrationService");
 const passwordService = require("../services/passwordService");
-const batchService = require("../services/batchService");
+const batchEnrollmentService = require("../services/batchEnrollmentService");
 const batchAccessService = require("../services/batchAccessService");
 const sessionService = require("../services/sessionService");
 const { ROLES } = require("../constants");
 const { AppError } = require("../utils/errors");
 const asyncHandler = require("../utils/asyncHandler");
-const { readAuthSettings, readCookieSettings } = require("../config/auth");
-const { clearAuthCookies, getRefreshToken, setAuthCookies } = require("../utils/cookies");
+const { readCookieSettings } = require("../config/auth");
+const { clearAuthCookies, getRefreshToken } = require("../utils/cookies");
 const { assertObjectId, assertPassword } = require("../utils/validation");
-const { verifyCaptcha } = require("../utils/captcha");
-
-function saveLoginCookies(response, tokens) {
-  setAuthCookies(response, tokens, readAuthSettings(), readCookieSettings());
-}
-
-function isMobileClient(request) {
-  return request.get("x-client") === "mobile";
-}
-
-// Web stays cookie-only; the mobile app cannot read httpOnly cookies.
-function buildSessionResponse(request, result) {
-  const body = { user: result.user };
-
-  if (isMobileClient(request)) {
-    body.accessToken = result.accessToken;
-    body.refreshToken = result.refreshToken;
-  }
-
-  return body;
-}
+const { saveLoginCookies, buildSessionResponse } = require("./authResponse");
 
 const register = asyncHandler(async (request, response) => {
   let batchId;
@@ -63,7 +44,7 @@ const register = asyncHandler(async (request, response) => {
   });
 
   if (batchId) {
-    await batchService.enrollStudent({
+    await batchEnrollmentService.enrollStudent({
       requester: request.user,
       batchId,
       payload: { studentId: user.id },
@@ -74,13 +55,6 @@ const register = asyncHandler(async (request, response) => {
 });
 
 const login = asyncHandler(async (request, response) => {
-  const captchaToken = request.body.captchaToken;
-  const captchaOk = await verifyCaptcha(captchaToken);
-
-  if (!captchaOk) {
-    throw new AppError("CAPTCHA verification failed.", 400);
-  }
-
   const result = await authService.loginUser({
     email: request.body.email,
     password: request.body.password,
@@ -134,6 +108,7 @@ const getMe = asyncHandler(async (request, response) => {
 
   const safeUser = user.toObject();
   safeUser.permissions = request.user.permissions;
+
   return response.json(safeUser);
 });
 
