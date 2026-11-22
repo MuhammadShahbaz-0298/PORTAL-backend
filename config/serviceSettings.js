@@ -73,4 +73,11 @@ function readAtRiskSettings(source = process.env) {
   return { enabled, attendanceThreshold, missedSubmissionThreshold, schedule };
 }
 
-module.exports = { readAiSettings, readAtRiskSettings };
+function readPushSettings(source = process.env) {
+  const enabled =
+    source.PUSH_ENABLED === undefined ||
+    String(source.PUSH_ENABLED).trim().toLowerCase() !== "false";
+  return { enabled };
+}
+
+module.exports = { readAiSettings, readAtRiskSettings, readPushSettings };

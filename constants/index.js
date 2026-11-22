@@ -3,6 +3,8 @@
 
 const AI_CONSTANTS = require("./ai");
 const FEATURE_CONSTANTS = require("./features");
+const NOTIFICATION_CONSTANTS = require("./notifications");
+const PUSH_CONSTANTS = require("./push");
 
 const ROLES = Object.freeze({
   ADMIN: "admin",
@@ -74,6 +76,8 @@ const CSRF_HEADER_VALUE = "1";
 module.exports = {
   ...AI_CONSTANTS,
   ...FEATURE_CONSTANTS,
+  ...NOTIFICATION_CONSTANTS,
+  ...PUSH_CONSTANTS,
   ROLES,
   ATTENDANCE_STATUSES,
   SUBMISSION_STATUSES,

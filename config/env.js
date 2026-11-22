@@ -3,7 +3,7 @@
 
 // A JWT secret shorter than this can be brute-forced, so we refuse to start.
 const { readAuthSettings } = require("./auth");
-const { readAiSettings, readAtRiskSettings } = require("./serviceSettings");
+const { readAiSettings, readAtRiskSettings, readPushSettings } = require("./serviceSettings");
 const { MINIMUM_JWT_SECRET_LENGTH, validateCoreSettings } = require("./envValidation");
 
 // The whole check lives in one function so tests can pass a fake environment.
@@ -41,6 +41,7 @@ function loadEnvironment(source = process.env) {
     auth: authSettings,
     ai: readAiSettings(source),
     atRisk: atRiskSettings,
+    push: readPushSettings(source),
   };
 }
 
@@ -48,5 +49,6 @@ module.exports = {
   loadEnvironment,
   readAiSettings,
   readAtRiskSettings,
+  readPushSettings,
   MINIMUM_JWT_SECRET_LENGTH,
 };

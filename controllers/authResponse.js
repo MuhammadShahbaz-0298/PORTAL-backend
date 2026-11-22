@@ -2,6 +2,7 @@
 // Web clients remain cookie-only; mobile clients receive session tokens.
 
 const { readAuthSettings, readCookieSettings } = require("../config/auth");
+const { MOBILE_CLIENT_HEADER_NAME, SESSION_CLIENT_TYPES } = require("../constants/auth");
 const { setAuthCookies } = require("../utils/cookies");
 
 function saveLoginCookies(response, tokens) {
@@ -9,7 +10,7 @@ function saveLoginCookies(response, tokens) {
 }
 
 function isMobileClient(request) {
-  return request.get("x-client") === "mobile";
+  return request.get(MOBILE_CLIENT_HEADER_NAME) === SESSION_CLIENT_TYPES.MOBILE;
 }
 
 function buildSessionResponse(request, result) {

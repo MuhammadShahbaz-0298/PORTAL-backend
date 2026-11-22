@@ -4,15 +4,25 @@
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const Session = require("../models/Session");
+const {
+  MOBILE_CLIENT_HEADER_NAME,
+  USER_AGENT_HEADER_NAME,
+  SESSION_CLIENT_TYPES,
+} = require("../constants/auth");
 const { hashRefreshToken } = require("./tokenService");
 
 const HOUR_MILLISECONDS = 60 * 60 * 1000;
 const DAY_MILLISECONDS = 24 * HOUR_MILLISECONDS;
 
 function getRequestDetails(request) {
+  const client = String(request.get(MOBILE_CLIENT_HEADER_NAME) || "").toLowerCase();
   return {
     ip: String(request.ip || "").slice(0, 64),
-    userAgent: String(request.get("user-agent") || "").slice(0, 500),
+    userAgent: String(request.get(USER_AGENT_HEADER_NAME) || "").slice(0, 500),
+    client:
+      client === SESSION_CLIENT_TYPES.MOBILE
+        ? SESSION_CLIENT_TYPES.MOBILE
+        : SESSION_CLIENT_TYPES.WEB,
   };
 }
 
@@ -38,6 +48,7 @@ async function createSession({
   await Session.create({
     _id: sessionId,
     user: userId,
+    client: requestDetails.client,
     tokenHash,
     familyId,
     expiresAt: calculateExpiryDate(settings, familyExpiresAt, now),

@@ -69,7 +69,9 @@ async function loginUser({ email, password, request }) {
   }
 
   clearLoginFailures(ip, normalizedEmail);
-  const tokens = await createLoginSession({ user, request, settings });
+  const sessionClient = sessionService.getSessionClient(request);
+  const sessionSettings = sessionService.getAuthSettingsForClient(settings, sessionClient);
+  const tokens = await createLoginSession({ user, request, settings: sessionSettings });
 
   return {
     user: await toSafeUser(user),
@@ -87,6 +89,9 @@ async function refreshSession({ refreshToken, request }) {
     throw new AppError("Session is invalid or expired.", 401);
   }
 
+  const sessionClient = sessionService.getSessionClient(request, session);
+  const sessionSettings = sessionService.getAuthSettingsForClient(settings, sessionClient);
+
   // A token that was already replaced means someone is replaying an old token.
   if (session.replacedBy) {
     await sessionService.revokeFamily(session.familyId);
@@ -97,7 +102,7 @@ async function refreshSession({ refreshToken, request }) {
     throw new AppError("Session is invalid or expired.", 401);
   }
 
-  const sessionProblem = sessionService.getSessionProblem(session, settings);
+  const sessionProblem = sessionService.getSessionProblem(session, sessionSettings);
   if (sessionProblem) {
     await sessionService.revokeSession(session._id);
     throw new AppError("Session is invalid or expired.", 401);
@@ -116,7 +121,7 @@ async function refreshSession({ refreshToken, request }) {
     session,
     newRefreshToken,
     request,
-    settings,
+    settings: sessionSettings,
   });
 
   if (!rotatedSession) {
@@ -128,7 +133,7 @@ async function refreshSession({ refreshToken, request }) {
     throw new AppError("Session is invalid or expired.", 401);
   }
 
-  const accessToken = tokenService.signAccessToken(user, rotatedSession.sessionId, settings);
+  const accessToken = tokenService.signAccessToken(user, rotatedSession.sessionId, sessionSettings);
 
   return {
     user: await toSafeUser(user),

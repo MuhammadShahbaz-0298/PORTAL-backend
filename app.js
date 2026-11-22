@@ -38,6 +38,7 @@ const aiRoutes = require("./routes/ai");
 const bulkImportRoutes = require("./routes/bulkImport");
 const reportCardRoutes = require("./routes/reportCard");
 const eventRoutes = require("./routes/events");
+const deviceRoutes = require("./routes/devices");
 
 const app = express();
 
@@ -98,6 +99,7 @@ app.use("/api/search", searchRoutes);
 app.use("/api", calendarRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/devices", deviceRoutes);
 
 app.use((request, response, next) => {
   return next(new AppError("Route not found.", 404));

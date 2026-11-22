@@ -2,6 +2,7 @@
 // Rotating a token creates a new row and marks the old row as replaced.
 
 const mongoose = require("mongoose");
+const { SESSION_CLIENT_TYPES } = require("../constants/auth");
 
 const sessionSchema = new mongoose.Schema(
   {
@@ -10,6 +11,11 @@ const sessionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
       index: true,
+    },
+    client: {
+      type: String,
+      enum: Object.values(SESSION_CLIENT_TYPES),
+      default: SESSION_CLIENT_TYPES.WEB,
     },
     tokenHash: { type: String, required: true, unique: true },
     // Every rotation keeps the same family id, so reuse can revoke the whole family.

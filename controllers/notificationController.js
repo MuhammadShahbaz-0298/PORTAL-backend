@@ -1,6 +1,5 @@
-// HTTP controller for n ot if ic at io nc on tr ol le r.
-// Keeps request and response handling separate from business rules.
-// HTTP layer for notifications. Users only see their own notifications.
+// HTTP controller for notification inbox routes.
+// User identity comes from auth middleware; request bodies cannot choose an owner.
 
 const notificationService = require("../services/notificationService");
 const asyncHandler = require("../utils/asyncHandler");
@@ -29,4 +28,8 @@ const clearAll = asyncHandler(async (request, response) => {
   return response.json(result);
 });
 
-module.exports = { listNotifications, markAsRead, clearAll };
+module.exports = {
+  listNotifications,
+  markAsRead,
+  clearAll,
+};

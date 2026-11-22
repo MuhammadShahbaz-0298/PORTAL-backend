@@ -29,6 +29,11 @@ async function listQuizzes({ requester, query }) {
   const pagination = getPagination(query);
   const role = getUserRole(requester);
   const filters = [{ active: true }];
+  const requestedBatchId = query.batchId ? assertObjectId(query.batchId, "batch id") : null;
+
+  if (requestedBatchId) {
+    filters.push({ batch: requestedBatchId });
+  }
 
   if (role === ROLES.TEACHER) {
     const ownedBatchIds = await batchAccessService.getTeacherBatchIds(getUserId(requester));

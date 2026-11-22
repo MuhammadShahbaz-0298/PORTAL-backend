@@ -34,7 +34,9 @@ const auth = asyncHandler(async (request, response, next) => {
 
   const authSettings = readAuthSettings();
   const session = await sessionService.findSessionById(tokenPayload.sessionId);
-  const sessionProblem = sessionService.getSessionProblem(session, authSettings);
+  const sessionClient = sessionService.getSessionClient(request, session);
+  const sessionSettings = sessionService.getAuthSettingsForClient(authSettings, sessionClient);
+  const sessionProblem = sessionService.getSessionProblem(session, sessionSettings);
 
   if (sessionProblem) {
     if (session) {
@@ -64,7 +66,7 @@ const auth = asyncHandler(async (request, response, next) => {
     throw new AppError("You must change your password before continuing.", 403);
   }
 
-  await sessionService.touchSession(session, authSettings);
+  await sessionService.touchSession(session, sessionSettings);
 
   request.user = {
     userId: String(user._id),

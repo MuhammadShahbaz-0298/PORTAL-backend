@@ -1,7 +1,7 @@
 // Reads the auth numbers from the environment and checks they are safe.
 // The defaults are in constants/auth.js so there is only one place to look.
 
-const { AUTH_LIMITS } = require("../constants/auth");
+const { AUTH_LIMITS, SESSION_CLIENT_TYPES } = require("../constants/auth");
 
 function readPositiveInteger(source, name, fallback) {
   const rawValue = source[name];
@@ -39,6 +39,21 @@ function readAuthSettings(source = process.env) {
     "SESSION_MAX_HOURS",
     AUTH_LIMITS.SESSION_MAX_HOURS,
   );
+  const mobileIdleTimeoutMinutes = readPositiveInteger(
+    source,
+    "MOBILE_IDLE_TIMEOUT_MINUTES",
+    AUTH_LIMITS.MOBILE_IDLE_TIMEOUT_MINUTES,
+  );
+  const mobileRefreshTokenDays = readPositiveInteger(
+    source,
+    "MOBILE_REFRESH_TOKEN_DAYS",
+    AUTH_LIMITS.MOBILE_REFRESH_TOKEN_DAYS,
+  );
+  const mobileSessionMaxHours = readPositiveInteger(
+    source,
+    "MOBILE_SESSION_MAX_HOURS",
+    AUTH_LIMITS.MOBILE_SESSION_MAX_HOURS,
+  );
 
   // A token that lives longer than the idle timeout would keep a dead session alive.
   if (accessTokenMinutes > idleTimeoutMinutes) {
@@ -49,15 +64,47 @@ function readAuthSettings(source = process.env) {
     throw new Error("SESSION_MAX_HOURS must be at least as long as IDLE_TIMEOUT_MINUTES.");
   }
 
+  if (accessTokenMinutes > mobileIdleTimeoutMinutes) {
+    throw new Error("ACCESS_TOKEN_MINUTES must not be longer than MOBILE_IDLE_TIMEOUT_MINUTES.");
+  }
+
+  if (mobileSessionMaxHours * 60 < mobileIdleTimeoutMinutes) {
+    throw new Error(
+      "MOBILE_SESSION_MAX_HOURS must be at least as long as MOBILE_IDLE_TIMEOUT_MINUTES.",
+    );
+  }
+
+  if (mobileRefreshTokenDays * 24 * 60 < mobileIdleTimeoutMinutes) {
+    throw new Error(
+      "MOBILE_REFRESH_TOKEN_DAYS must be at least as long as MOBILE_IDLE_TIMEOUT_MINUTES.",
+    );
+  }
+
   return {
     accessTokenMinutes,
     refreshTokenDays,
     idleTimeoutMinutes,
     sessionMaxHours,
+    mobileRefreshTokenDays,
+    mobileIdleTimeoutMinutes,
+    mobileSessionMaxHours,
     loginMaxAttempts: AUTH_LIMITS.LOGIN_MAX_ATTEMPTS,
     loginWindowMinutes: AUTH_LIMITS.LOGIN_WINDOW_MINUTES,
     lastActiveUpdateSeconds: AUTH_LIMITS.LAST_ACTIVE_UPDATE_SECONDS,
     refreshTokenBytes: AUTH_LIMITS.REFRESH_TOKEN_BYTES,
+  };
+}
+
+function getAuthSettingsForClient(settings, client) {
+  if (client !== SESSION_CLIENT_TYPES.MOBILE) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    refreshTokenDays: settings.mobileRefreshTokenDays,
+    idleTimeoutMinutes: settings.mobileIdleTimeoutMinutes,
+    sessionMaxHours: settings.mobileSessionMaxHours,
   };
 }
 
@@ -74,4 +121,4 @@ function readCookieSettings(source = process.env) {
   };
 }
 
-module.exports = { readAuthSettings, readCookieSettings };
+module.exports = { readAuthSettings, getAuthSettingsForClient, readCookieSettings };
