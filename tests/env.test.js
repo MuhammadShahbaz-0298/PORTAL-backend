@@ -116,6 +116,14 @@ test("reads token times from the environment", () => {
   assert.equal(settings.sessionMaxHours, 12);
 });
 
+test("uses a separate 30-day mobile session policy by default", () => {
+  const settings = readAuthSettings({});
+
+  assert.equal(settings.mobileIdleTimeoutMinutes, 30 * 24 * 60);
+  assert.equal(settings.mobileRefreshTokenDays, 30);
+  assert.equal(settings.mobileSessionMaxHours, 30 * 24);
+});
+
 test("production cookies are cross-site safe", () => {
   const production = readCookieSettings({ NODE_ENV: "production" });
   assert.equal(production.sameSite, "none");

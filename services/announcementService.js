@@ -4,13 +4,15 @@
 const Announcement = require("../models/Announcement");
 const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
-const { ANNOUNCEMENT_SCOPES } = require("../constants");
+const { ANNOUNCEMENT_SCOPES, ROLES } = require("../constants");
 const { AppError } = require("../utils/errors");
 const { getUserId, isAdmin } = require("../utils/authorization");
 const { assertObjectId, assertString, pickFields } = require("../utils/validation");
+const { readPushSettings } = require("../config/env");
 const batchAccessService = require("./batchAccessService");
 const notificationService = require("./notificationService");
 const announcementReadService = require("./announcementReadService");
+const pushService = require("./pushService");
 
 async function createAnnouncement({ requester, payload }) {
   const fields = pickFields(payload, ["title", "body", "scope", "batchId"]);
@@ -48,6 +50,28 @@ async function createAnnouncement({ requester, payload }) {
       announcementId: String(announcement._id),
       error: error.message,
     });
+  }
+
+  if (readPushSettings().enabled) {
+    try {
+      const studentIds = await announcementStudentIds(scope, batchId);
+      void pushService.sendToUsers({
+        userIds: studentIds,
+        title,
+        body,
+        data: { screen: "announcements", announcementId: String(announcement._id) },
+      }).catch((error) => {
+        console.error("[announcement_push_failed]", {
+          announcementId: String(announcement._id),
+          error: error.name,
+        });
+      });
+    } catch (error) {
+      console.error("[announcement_push_recipients_failed]", {
+        announcementId: String(announcement._id),
+        error: error.message,
+      });
+    }
   }
 
   await announcement.populate("createdBy", "name email role");
@@ -145,6 +169,20 @@ async function announcementRecipientIds(scope, batchId, authorId) {
   }
 
   return [];
+}
+
+async function announcementStudentIds(scope, batchId) {
+  const userFilter = { role: ROLES.STUDENT, active: true };
+  if (scope === "batch" && batchId) {
+    const studentIds = await Enrollment.distinct("student", {
+      batch: batchId,
+      active: { $ne: false },
+    });
+    userFilter._id = { $in: studentIds };
+  }
+
+  const students = await User.find(userFilter).select("_id").lean();
+  return students.map((student) => student._id);
 }
 
 module.exports = {

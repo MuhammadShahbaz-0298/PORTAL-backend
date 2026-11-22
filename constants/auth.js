@@ -14,6 +14,11 @@ const AUTH_LIMITS = Object.freeze({
   // Hard cap. Even an active user must log in again after this many hours.
   SESSION_MAX_HOURS: 24,
 
+  // Mobile sessions stay signed in across app restarts, with a 30-day cap.
+  MOBILE_REFRESH_TOKEN_DAYS: 30,
+  MOBILE_IDLE_TIMEOUT_MINUTES: 43200,
+  MOBILE_SESSION_MAX_HOURS: 720,
+
   // Login lockout: after this many failures in the window, block the key.
   LOGIN_MAX_ATTEMPTS: 10,
   LOGIN_WINDOW_MINUTES: 15,
@@ -24,6 +29,13 @@ const AUTH_LIMITS = Object.freeze({
   // crypto.randomBytes(64) gives a 128-character hex refresh token.
   REFRESH_TOKEN_BYTES: 64,
 });
+
+const SESSION_CLIENT_TYPES = Object.freeze({
+  WEB: "web",
+  MOBILE: "mobile",
+});
+const MOBILE_CLIENT_HEADER_NAME = "x-client";
+const USER_AGENT_HEADER_NAME = "user-agent";
 
 const AUTH_COOKIES = Object.freeze({
   ACCESS_NAME: "portal_access",
@@ -36,4 +48,11 @@ const AUTH_COOKIES = Object.freeze({
 // A user with a temporary password may call only this route.
 const CHANGE_PASSWORD_ENDPOINT = "/api/auth/change-password";
 
-module.exports = { AUTH_LIMITS, AUTH_COOKIES, CHANGE_PASSWORD_ENDPOINT };
+module.exports = {
+  AUTH_LIMITS,
+  SESSION_CLIENT_TYPES,
+  MOBILE_CLIENT_HEADER_NAME,
+  USER_AGENT_HEADER_NAME,
+  AUTH_COOKIES,
+  CHANGE_PASSWORD_ENDPOINT,
+};

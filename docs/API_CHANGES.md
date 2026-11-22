@@ -468,3 +468,60 @@ next client save/submit request; late answer payloads are ignored. In-progress
 attempts are excluded from staff results. The
 `POST /api/quizzes/:id/attempt/violation` route records fullscreen/tab exits;
 the third exit submits the saved answers after two warnings.
+
+## 29. Device registration and push notifications — additive
+
+Authenticated mobile clients can register an Expo push token with
+`POST /api/devices`:
+
+```json
+{ "token": "ExponentPushToken[...]", "platform": "ios" }
+```
+
+`platform` must be `ios` or `android`. Registering the same token again updates
+its owner, platform and last-seen time. Remove the current user's token with
+`DELETE /api/devices/:token` (URL-encode the token); another user's token
+returns `404`.
+
+New announcements are also sent to enrolled batch students or all active
+students for school-wide announcements. Delivery is best-effort and can be
+disabled with `PUSH_ENABLED=false`; in-app notifications remain available
+through `GET /api/notifications`.
+
+## 30. Mobile session lifetime — mobile behavior change
+
+Web session defaults remain unchanged. Mobile sessions use a 30-day refresh
+token lifetime, inactivity timeout, and absolute session cap by default. These
+are configurable with `MOBILE_REFRESH_TOKEN_DAYS`,
+`MOBILE_IDLE_TIMEOUT_MINUTES`, and `MOBILE_SESSION_MAX_HOURS`.
+
+## 31. Assistant conversation history — additive
+
+`POST /api/ai/assistant/ask` accepts optional conversation history:
+
+```json
+{
+  "question": "How do I create a quiz?",
+  "conversation": [
+    { "role": "user", "content": "Where are quizzes?" },
+    { "role": "assistant", "content": "Open Quizzes from the navigation." }
+  ]
+}
+```
+
+History is limited to 10 messages; roles must be `user` or `assistant`, each
+message is limited to 2,000 characters, and the current question is limited to
+4,000 characters. History is untrusted context, not instructions.
+
+## 32. Quiz list batch filter — additive
+
+`GET /api/quizzes` accepts an optional `batchId` query parameter in addition to
+standard pagination. The server validates the ID and applies the caller's
+existing batch-access rules.
+
+## 33. Multi-batch report cards — additive
+
+When `batchId` is omitted from `GET /api/users/:id/report-card`, the report
+includes all of the student's active enrolled batches. Supplying `batchId`
+continues to request one batch. Staff access checks apply to every included
+batch.

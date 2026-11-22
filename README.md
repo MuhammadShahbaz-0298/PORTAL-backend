@@ -87,6 +87,9 @@ and run `node scripts/seedDemo.js --apply`.
 | `REFRESH_TOKEN_DAYS`                            | no            | `7`                   | Refresh token life.                                       |
 | `IDLE_TIMEOUT_MINUTES`                          | no            | `10`                  | No request for this long logs the user out.               |
 | `SESSION_MAX_HOURS`                             | no            | `24`                  | Hard cap for one login.                                   |
+| `MOBILE_REFRESH_TOKEN_DAYS`                     | no            | `30`                  | Refresh token lifetime for the mobile app.                |
+| `MOBILE_IDLE_TIMEOUT_MINUTES`                   | no            | `43200`               | Mobile inactivity timeout (30 days).                      |
+| `MOBILE_SESSION_MAX_HOURS`                      | no            | `720`                 | Mobile hard cap (30 days); web settings remain unchanged. |
 | `COOKIE_DOMAIN`                                 | no            | empty                 | Only for a shared parent domain such as `.example.com`.   |
 | `UPLOAD_DIR`                                    | no            | `./uploads`           | Must be writable. See the storage note below.             |
 | `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | for seeding   |                       | Used only by `npm run seed:admin`.                        |
@@ -136,7 +139,7 @@ All routes are under `/api`. Full details are in `docs/API.md`.
 | Area        | Routes                                                                                                                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth        | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/logout-all`, `/auth/change-password`, `/auth/register`; `GET /auth/me`                                                                                   |
-| Users       | `GET /users`, `PATCH /users/:id`, `PATCH /users/:id/reset-password`, `DELETE /users/:id`, Excel import/template and export                                                                                          |
+| Users       | `GET /users`, `PATCH /users/:id`, `PATCH /users/:id/reset-password`, `DELETE /users/:id`, Excel import/template and export                                                                                           |
 | Batches     | `GET/POST /batches`, `PATCH/DELETE /batches/:id`, `POST /batches/:id/enroll`, `GET /batches/:id/students` and eligible-student lists                                                                                 |
 | Assignments | `GET/POST /assignments`, `GET/PATCH/DELETE /assignments/:id`                                                                                                                                                         |
 | Submissions | `GET /submissions`, `POST /submissions`, `PATCH /submissions/:id/file`, `PATCH /submissions/:id/grade`, `GET /submissions/:id/download`, `POST /submissions/:id/ai-draft`, `PATCH /submissions/:id/ai-draft/discard` |

@@ -2,7 +2,12 @@
 // Recipients can clear their own notifications; they cannot affect other users.
 
 const mongoose = require("mongoose");
-const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require("../constants");
+const {
+  NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNEL,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_MESSAGE_MAX_LENGTH,
+} = require("../constants");
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -21,12 +26,12 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 2000,
+      maxlength: NOTIFICATION_MESSAGE_MAX_LENGTH,
     },
     channel: {
       type: String,
       enum: NOTIFICATION_CHANNELS,
-      default: "inApp",
+      default: NOTIFICATION_CHANNEL.IN_APP,
     },
     emailSent: { type: Boolean, default: false },
     read: { type: Boolean, default: false },

@@ -86,6 +86,7 @@ test("students can take an enrolled quiz but cannot read another batch's quiz", 
       },
     ],
   });
+
   const studentClient = await login(environment, "student@example.test");
 
   const quiz = await studentClient.get(`/api/quizzes/${created.data._id}`);
@@ -123,4 +124,29 @@ test("students can take an enrolled quiz but cannot read another batch's quiz", 
     (await studentClient.post(`/api/quizzes/${otherQuiz.data._id}/attempt/start`)).status,
     403,
   );
+});
+
+test("quiz lists can be filtered by batch", async () => {
+  const otherBatch = await Batch.create({
+    name: "Grade 2",
+    teacher: teacher._id,
+    active: true,
+  });
+  for (const [title, batchId] of [
+    ["Grade 1 quiz", String(batch._id)],
+    ["Grade 2 quiz", String(otherBatch._id)],
+  ]) {
+    const response = await adminClient.post("/api/quizzes", {
+      title,
+      batchId,
+      timeLimitMinutes: 10,
+      questions: [{ text: "Question", options: ["A", "B"], correctIndex: 0 }],
+    });
+    assert.equal(response.status, 201);
+  }
+
+  const response = await adminClient.get(`/api/quizzes?batchId=${batch._id}`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.length, 1);
+  assert.equal(response.data[0].title, "Grade 1 quiz");
 });

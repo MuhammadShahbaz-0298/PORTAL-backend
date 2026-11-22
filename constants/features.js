@@ -13,7 +13,8 @@ const NOTIFICATION_TYPES = Object.freeze({
   RISK_FLAG: "risk.flag",
   EVENT: "event.created",
 });
-const NOTIFICATION_CHANNELS = Object.freeze(["inApp"]);
+const NOTIFICATION_CHANNEL = Object.freeze({ IN_APP: "inApp" });
+const NOTIFICATION_CHANNELS = Object.freeze(Object.values(NOTIFICATION_CHANNEL));
 const ANNOUNCEMENT_SCOPES = Object.freeze(["batch", "school"]);
 const QUIZ_DEFAULT_SCORE = 0;
 const QUIZ_MAX_TIME_LIMIT_MINUTES = 1440;
@@ -38,6 +39,7 @@ module.exports = {
   EVENT_TITLE_MAX_LENGTH,
   EVENT_DESCRIPTION_MAX_LENGTH,
   NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNEL,
   NOTIFICATION_CHANNELS,
   ANNOUNCEMENT_SCOPES,
   QUIZ_DEFAULT_SCORE,

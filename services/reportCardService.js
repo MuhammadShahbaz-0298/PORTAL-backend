@@ -1,4 +1,4 @@
-// Generates a PDF report card for one student in one batch.
+// Generates a PDF report card for one student and their requested active batches.
 // Template fields (school name, logo path) come from env vars, not hardcoded.
 
 const PDFDocument = require("pdfkit");
@@ -13,10 +13,10 @@ const { getUserId, getUserRole } = require("../utils/authorization");
 const { assertObjectId } = require("../utils/validation");
 const batchAccessService = require("./batchAccessService");
 
-async function resolveBatchId(userId, batchId) {
+async function resolveBatchIds(userId, batchId) {
   if (batchId) {
     assertObjectId(batchId, "batch id");
-    return batchId;
+    return [batchId];
   }
   const enrollments = await Enrollment.find({
     student: userId,
@@ -25,11 +25,10 @@ async function resolveBatchId(userId, batchId) {
     .select("batch")
     .lean();
   const batchIds = [...new Set(enrollments.map((e) => String(e.batch)).filter(Boolean))];
-  if (batchIds.length === 1) return batchIds[0];
   if (batchIds.length === 0) {
     throw new AppError("This student is not enrolled in an active batch.", 400);
   }
-  throw new AppError("Specify batchId. This student belongs to multiple active batches.", 400);
+  return batchIds;
 }
 
 async function buildReportCard({ requester, userId, batchId }) {
@@ -42,12 +41,16 @@ async function buildReportCard({ requester, userId, batchId }) {
     throw new AppError("You cannot view another student's report card.", 403);
   }
 
-  const resolvedBatchId = await resolveBatchId(userId, batchId);
+  const resolvedBatchIds = await resolveBatchIds(userId, batchId);
 
   if (role === ROLES.TEACHER) {
-    await batchAccessService.assertCanManageBatch(requester, resolvedBatchId);
+    for (const resolvedBatchId of resolvedBatchIds) {
+      await batchAccessService.assertCanManageBatch(requester, resolvedBatchId);
+    }
   } else if (role === ROLES.STUDENT) {
-    await batchAccessService.assertCanAccessBatch(requester, resolvedBatchId);
+    for (const resolvedBatchId of resolvedBatchIds) {
+      await batchAccessService.assertCanAccessBatch(requester, resolvedBatchId);
+    }
   }
 
   const student = await User.findById(userId).select("name email role").lean();
@@ -55,13 +58,20 @@ async function buildReportCard({ requester, userId, batchId }) {
     throw new AppError("Student not found.", 404);
   }
 
-  const batch = await Batch.findById(resolvedBatchId).lean();
-  if (!batch) {
+  const batches = await Batch.find({ _id: { $in: resolvedBatchIds } }).lean();
+  if (batches.length !== resolvedBatchIds.length) {
     throw new AppError("Batch not found.", 404);
   }
 
-  const submissions = await Submission.find({ student: userId, batch: resolvedBatchId }).lean();
-  const attendance = await Attendance.find({ student: userId, batch: resolvedBatchId }).lean();
+  const batchReports = await Promise.all(
+    batches.map(async (batch) => {
+      const [submissions, attendance] = await Promise.all([
+        Submission.find({ student: userId, batch: batch._id }).lean(),
+        Attendance.find({ student: userId, batch: batch._id }).lean(),
+      ]);
+      return { batch, submissions, attendance };
+    }),
+  );
 
   const schoolName = process.env.REPORT_CARD_SCHOOL_NAME || "School Portal";
 
@@ -83,33 +93,40 @@ async function buildReportCard({ requester, userId, batchId }) {
     // Student info
     doc.fontSize(12).text(`Student: ${student.name}`);
     doc.text(`Email: ${student.email}`);
-    doc.text(`Batch: ${batch.name}`);
+    doc.text(
+      `${batches.length === 1 ? "Batch" : "Classes"}: ${batches.map((batch) => batch.name).join(", ")}`,
+    );
     doc.text(`Generated: ${new Date().toLocaleDateString()}`);
-    doc.moveDown(1);
+    batchReports.forEach(({ batch, submissions, attendance }, index) => {
+      if (index > 0) doc.addPage();
+      doc.moveDown(1);
+      doc.fontSize(14).text(`Class: ${batch.name}`, { underline: true });
+      doc.moveDown(0.5);
 
-    // Grades
-    doc.fontSize(13).text("Grades", { underline: true });
-    doc.moveDown(0.5);
-    if (submissions.length === 0) {
-      doc.fontSize(11).text("No submissions recorded.");
-    } else {
-      for (const submission of submissions) {
-        doc
-          .fontSize(11)
-          .text(
-            `Grade: ${submission.grade || "N/A"} | Status: ${submission.status} | Submitted: ${submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString() : "N/A"}`,
-          );
+      // Grades
+      doc.fontSize(13).text("Grades", { underline: true });
+      doc.moveDown(0.5);
+      if (submissions.length === 0) {
+        doc.fontSize(11).text("No submissions recorded.");
+      } else {
+        for (const submission of submissions) {
+          doc
+            .fontSize(11)
+            .text(
+              `Grade: ${submission.grade || "N/A"} | Status: ${submission.status} | Submitted: ${submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString() : "N/A"}`,
+            );
+        }
       }
-    }
-    doc.moveDown(1);
+      doc.moveDown(1);
 
-    // Attendance
-    doc.fontSize(13).text("Attendance", { underline: true });
-    doc.moveDown(0.5);
-    const presentCount = attendance.filter((r) => r.status === "present").length;
-    const total = attendance.length;
-    doc.fontSize(11).text(`Present: ${presentCount} / ${total}`);
-    doc.text(`Percentage: ${total ? Math.round((presentCount / total) * 100) : 0}%`);
+      // Attendance
+      doc.fontSize(13).text("Attendance", { underline: true });
+      doc.moveDown(0.5);
+      const presentCount = attendance.filter((record) => record.status === "present").length;
+      const total = attendance.length;
+      doc.fontSize(11).text(`Present: ${presentCount} / ${total}`);
+      doc.text(`Percentage: ${total ? Math.round((presentCount / total) * 100) : 0}%`);
+    });
 
     doc.end();
   });

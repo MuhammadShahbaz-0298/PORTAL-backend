@@ -2,27 +2,38 @@
 // A notification is created for one recipient.
 
 const Notification = require("../models/Notification");
-const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require("../constants");
+const {
+  NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNEL,
+  NOTIFICATION_CHANNELS,
+  NOTIFICATION_MESSAGE_MAX_LENGTH,
+} = require("../constants");
 const { AppError } = require("../utils/errors");
 const { assertObjectId, assertString, assertEnum } = require("../utils/validation");
 
 // Creates one notification. Used by every trigger below so the logic stays in one place.
-async function createNotification({ recipientId, type, message, channel = "inApp", link }) {
+async function createNotification({
+  recipientId,
+  type,
+  message,
+  channel = NOTIFICATION_CHANNEL.IN_APP,
+  link,
+}) {
   assertObjectId(recipientId, "recipient id");
   assertEnum(type, Object.values(NOTIFICATION_TYPES), "type");
-  assertString(message, "message", { maxLength: 2000 });
+  assertString(message, "message", { maxLength: NOTIFICATION_MESSAGE_MAX_LENGTH });
   assertEnum(channel, NOTIFICATION_CHANNELS, "channel");
 
-  return Notification.create({
+  const notification = await Notification.create({
     recipient: recipientId,
     type,
     message,
     channel,
     link: link || undefined,
   });
+  return notification;
 }
 
-// Trigger: a submission was graded. Notify the student who owns it.
 async function notifySubmissionGraded({ submission, gradedBy: _gradedBy }) {
   return createNotification({
     recipientId: String(submission.student),
@@ -32,7 +43,6 @@ async function notifySubmissionGraded({ submission, gradedBy: _gradedBy }) {
   });
 }
 
-// Trigger: a new assignment was posted in a batch. Notify every enrolled student.
 async function notifyNewAssignment({ assignment, batch: _batch, studentIds }) {
   const notifications = [];
   for (const studentId of studentIds) {
@@ -48,7 +58,6 @@ async function notifyNewAssignment({ assignment, batch: _batch, studentIds }) {
   return Promise.all(notifications);
 }
 
-// Trigger: a quiz was published to a batch. Notify every enrolled student.
 async function notifyNewQuiz({ quiz, studentIds }) {
   const notifications = [];
   for (const studentId of studentIds) {
@@ -64,7 +73,6 @@ async function notifyNewQuiz({ quiz, studentIds }) {
   return Promise.all(notifications);
 }
 
-// Trigger: an admin reset a user's password. Notify that user.
 async function notifyAdminReset({ userId }) {
   return createNotification({
     recipientId: String(userId),
@@ -75,7 +83,6 @@ async function notifyAdminReset({ userId }) {
   });
 }
 
-// Trigger: an AI feedback draft is ready. Notify the grading teacher.
 async function notifyAiDraftReady({ submission, teacherId }) {
   return createNotification({
     recipientId: String(teacherId),
@@ -85,7 +92,6 @@ async function notifyAiDraftReady({ submission, teacherId }) {
   });
 }
 
-// Trigger: an announcement was posted. Notify the relevant audience.
 async function notifyAnnouncement({ announcement, recipientIds }) {
   const notifications = [];
   for (const recipientId of recipientIds) {
@@ -101,7 +107,6 @@ async function notifyAnnouncement({ announcement, recipientIds }) {
   return Promise.all(notifications);
 }
 
-// List notifications for one user, newest first.
 async function listNotifications({ recipientId, query }) {
   const { getPagination } = require("../utils/pagination");
   const pagination = getPagination(query);
@@ -116,7 +121,6 @@ async function listNotifications({ recipientId, query }) {
   return { items, pagination, total };
 }
 
-// Mark one notification as read. Only the recipient may do this.
 async function markAsRead({ recipientId, notificationId }) {
   assertObjectId(notificationId, "notification id");
 
